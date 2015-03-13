@@ -1,0 +1,38 @@
+---------------------
+PatchSet 14 
+Date: 2010/07/02 00:24:36
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+More cosmetic additions.
+
+Members: 
+	ReactomeToGPMLConverter.java:1.12->1.13 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.12 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.13
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.12	Mon Jun 28 10:43:47 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Thu Jul  1 12:24:36 2010
+@@ -995,6 +995,12 @@
+             graphics.setAttribute(GPMLConstants.FillColor, getHexString(new Color(204, 255, 255)));
+             graphics.setAttribute(GPMLConstants.LineThickness, "2");
+         }
++        else if (type.equals("Protein")) {
++            graphics.setAttribute(GPMLConstants.ShapeType, GPMLConstants.RoundedRectangle);
++        }
++        else if (type.equals("Metabolite")) {
++            graphics.setAttribute(GPMLConstants.ShapeType, GPMLConstants.Oval);
++        }
+     }
+ 
+     private String wrapLines(String s, float wrappingWidth, FontRenderContext frc, String lineBreak) {
+@@ -1017,7 +1023,7 @@
+     private void wrapLabels(Element dataNode, FontRenderContext frc) {
+         String label = dataNode.getAttributeValue("TextLabel");
+         Float width = new Float(getGraphicsChild(dataNode).getAttributeValue("Width"));
+-        System.out.println(label);
++        //System.out.println(label);
+         // XML serialisation automatically converts "\n" to "&#xA;"
+         String wrappedLabel = wrapLines(label, width, frc, "\n");
+         dataNode.setAttribute("TextLabel", wrappedLabel);

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="common" basedir="..">
+    <description>
+    	Common definitions for other ant files.
+    </description>
+	
+	<property name="srcDir" value="src" />
+	<property name="buildDir" value="build" />
+	<property name="tempDir" value="temp" />
+	<property name="libDir" value="lib" />
+	<!-- directory containing the ant files -->
+	<property name="antDir" value="ant" />
+	
+	<path id="classpath">
+		<fileset dir="${libDir}">
+			<include name="**/*.jar"/>
+		</fileset>
+		<pathelement location="${tempDir}/classes" />
+		<pathelement location="${libDir}" />
+	</path>
+	
+	<target name="clean">
+		<delete dir="${buildDir}" />
+	</target>
+	
+	<target name="mkdir">
+		<mkdir dir="${buildDir}"/>
+		<mkdir dir="${tempDir}"/>
+		<mkdir dir="${libDir}"/>
+	</target>
+	
+	<!-- fetches the libraries used by reactome as our dependencies -->
+	<target name="fetch-lib" depends="mkdir">
+		<get
+			src="http://brie8.cshl.org/download/tools/curatorTool/InstData/win_linux/install.zip"
+			dest="${tempDir}/curator.zip"
+			verbose="yes"
+			usetimestamp="yes"
+		/>
+		<mkdir dir="${tempDir}/curator"/>
+		<unzip src="${tempDir}/curator.zip" dest="${tempDir}/curator/" />
+		<mkdir dir="${libDir}/reactome"/>
+		<copy file="${tempDir}/curator/reactome.jar" todir="${libDir}/reactome" />
+		<copy todir="${libDir}/reactome">
+			<fileset dir="${tempDir}/curator/lib">
+			</fileset>
+		</copy>
+	</target>
+	
+</project>

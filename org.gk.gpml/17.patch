@@ -1,0 +1,2375 @@
+---------------------
+PatchSet 17 
+Date: 2010/08/16 23:01:58
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+Checked in files in development during the course of GSoC 2010. History of these files can be seen at http://bitbucket.org/leonth/reactome-wikipathways-exchange .
+
+Members: 
+	CLIConverter.java:INITIAL->1.1 
+	ClassRegistry.java:INITIAL->1.1 
+	ConverterException.java:INITIAL->1.1 
+	ElementGuesser.java:INITIAL->1.1 
+	ElementIterator.java:INITIAL->1.1 
+	ElementToRenderableConverter.java:INITIAL->1.1 
+	GPML2010a.xsd:INITIAL->1.1 
+	GPMLToReactomeConverter.java:INITIAL->1.1 
+	ReactomeElementGuesser.java:INITIAL->1.1 
+	ReactomeRelation.java:INITIAL->1.1 
+	ReactomeToGPMLConverter.java:1.14->1.15 
+	TestPathways.java:INITIAL->1.1 
+	atxml.xsd:INITIAL->1.1 
+
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/CLIConverter.java	2010-09-08 01:08:09.076011330 +0800
+@@ -0,0 +1,85 @@
++/*
++ * This command line interface is used to convert a pathway that has a diagram inside the reactome
++ * database to GPML format.
++ */
++
++package org.gk.gpml;
++
++import java.io.FileOutputStream;
++
++import org.gk.gpml.ReactomeToGPMLConverter;
++import org.gk.model.GKInstance;
++import org.gk.persistence.MySQLAdaptor;
++import org.jdom.Document;
++import org.jdom.output.Format;
++import org.jdom.output.XMLOutputter;
++
++public class CLIConverter {
++    
++    private MySQLAdaptor adaptor;
++    private ReactomeToGPMLConverter r2gConverter;
++    
++    private CLIConverter(MySQLAdaptor adaptor) {
++        this(adaptor, new ReactomeToGPMLConverter());
++    }
++    
++    private CLIConverter(MySQLAdaptor adaptor, ReactomeToGPMLConverter r2gConverter) {
++        this.adaptor = adaptor;
++        this.r2gConverter = r2gConverter;
++        this.r2gConverter.setMySQLAdaptor(adaptor);
++    }
++    
++    private void convertReactomeToGPML(Long dbID, String outputFileName) throws Exception {
++        GKInstance pathway = adaptor.fetchInstance(dbID);
++        convertReactomeToGPML(pathway, outputFileName);
++    }
++    
++    private void convertReactomeToGPML(GKInstance pathway, String outputFileName) throws Exception {
++        Long dbID = pathway.getDBID();
++        System.out.println("converting pathway #" + dbID + " " + pathway.getDisplayName() + "...");
++        Document doc = r2gConverter.convertPathway(pathway);
++        XMLOutputter outputter = new XMLOutputter(Format.getPrettyFormat());
++        outputter.output(doc, new FileOutputStream(outputFileName));
++        /*
++        // Test loading using JDOM and validation
++        SAXBuilder builder = new SAXBuilder(true);
++        builder.setFeature("http://apache.org/xml/features/validation/schema", true);
++        builder.setProperty("http://apache.org/xml/properties/schema/external-schemaLocation",
++                            "http://genmapp.org/GPML/2008a http://svn.bigcat.unimaas.nl/pathvisio/trunk/GPML2008a.xsd");
++        doc = builder.build(new File(outputFileName));
++        */
++    }
++    
++    private static void printUsage() throws Exception {
++        System.out.println("Usage: java org.gk.gpml.CLIConverter dbhost dbName user pwd port DB_ID [outputfile]");
++        System.out.println();
++        System.out.println("DB_ID is the Reactome ID of a pathway that has a diagram inside the database.");
++    }
++    
++    public static void main (String[] args) throws Exception{
++        if ((args.length != 6) && (args.length != 7)) {
++            printUsage();
++            System.exit(1);			
++        }
++        Long dbID = new Long(args[5]);
++        MySQLAdaptor adaptor = new MySQLAdaptor(args[0],
++                args[1],
++                args[2], 
++                args[3],
++                Integer.parseInt(args[4]));
++        
++        GKInstance pathway = adaptor.fetchInstance(dbID);
++        String outputFileName;
++        if (args.length == 7) {
++            outputFileName = args[6];
++        }
++        else {
++            outputFileName = args[5]
++                             + " "
++                             + pathway.getDisplayName().replaceAll("[^0-9A-Za-z()_-]+", " ")
++                             + ".gpml";
++        }
++        CLIConverter converter = new CLIConverter(adaptor);
++        converter.convertReactomeToGPML(pathway, outputFileName);
++    }
++}
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/ClassRegistry.java	2010-09-08 01:08:28.595795679 +0800
+@@ -0,0 +1,56 @@
++package org.gk.gpml;
++
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++
++/**
++ * The ClassRegistry registers singleton classes and provides a list of instances (singletons) of the classes registered.
++ * 
++ * @author leon
++ *
++ */
++public class ClassRegistry {
++    private List<Class> classes = new ArrayList<Class>();
++    private List<Object> singletons = null;
++    private static Map<Class, ClassRegistry> registry = new HashMap<Class, ClassRegistry>();
++    
++    //To access the class, use getRegistry(Class) method.
++    private ClassRegistry() {
++        
++    }
++    
++    public static ClassRegistry getRegistry(Class c) {
++        ClassRegistry r = registry.get(c);
++        if (r == null) {
++            ClassRegistry newr = new ClassRegistry();
++            registry.put(c, newr);
++            return newr;
++        }
++        return r;
++    }
++    
++    public void register(Class c) {
++        classes.add(c);
++    }
++    
++    public List<Object> getSingletons() {
++        if (singletons == null) {
++            singletons = new ArrayList<Object>();
++            for (Class c : classes) {
++                try {
++                    singletons.add(c.newInstance());
++                }
++                catch (IllegalAccessException e) {
++                    
++                }
++                catch (InstantiationException e) {
++                    
++                }
++            }
++        }
++        return singletons;
++    }
++    
++}
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/ConverterException.java	2010-09-08 01:08:34.425059817 +0800
+@@ -0,0 +1,21 @@
++package org.gk.gpml;
++
++/**
++ * Exception that occurs during import, export, save or load of a Pathway.
++ */
++public class ConverterException extends Exception {
++
++
++    public ConverterException(String msg)
++    {
++        super(msg);
++    }
++
++    public ConverterException(Exception e)
++    {
++        super(e.getClass() + ": " + e.getMessage(), e);
++        setStackTrace(e.getStackTrace());
++    }
++
++
++}
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/ElementGuesser.java	2010-09-08 01:08:40.184031960 +0800
+@@ -0,0 +1,24 @@
++package org.gk.gpml;
++
++import java.util.List;
++import java.util.Map;
++
++import org.jdom.Element;
++
++public interface ElementGuesser {
++    /**
++     * Try to provide ElementToRenderableConverter that suits the element conversion best.
++     * 
++     * @param e one of the elements (specified by getElementNamesOfInterest()) to guess
++     * @return a map of guesses. Key is a org.gk.gpml.ElementToRenderableConverter that this class
++     * thinks can convert e the best. Value is a confidence value ranging from -1.0 ("This converter
++     * definitely does not need to convert e") to 1.0 ("This converter definitely needs to convert e").
++     */
++    Map <ElementToRenderableConverter, Double> guess(Element e, GPMLToReactomeConverter converter);
++    
++    /**
++     * 
++     * @return list of element names that can be processed by guess(Element).
++     */
++    List <String> getElementNamesOfInterest();
++}
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/ElementIterator.java	2010-09-08 01:08:46.942605132 +0800
+@@ -0,0 +1,68 @@
++package org.gk.gpml;
++
++import java.util.Collection;
++import java.util.Iterator;
++import java.util.LinkedList;
++
++import org.jdom.Document;
++import org.jdom.Element;
++
++
++/**
++ * Provides a breadth-first-search (BFS) iterator for elements in a particular Document matching certain element names.
++ * @author leon
++ *
++ */
++class ElementIterator implements Iterator<Element> {
++    
++    private Collection<String> interestingElementNames;
++    private Document doc;
++    private LinkedList<Element> queue;
++    
++    public ElementIterator(Document doc, Collection<String> interestingElementNames) {
++        this.doc = doc;
++        this.interestingElementNames = interestingElementNames;
++    }
++    
++    public boolean hasNext() {
++        if (queue == null) {
++            return true;
++        }
++        // process all elements until we get to a valid one
++        while (queue.size() > 0 && !isValid(queue.getFirst())) {
++            processQueueOnce();
++        }
++        if (queue.size() > 0) {
++            return true;
++        }
++        // we cannot find any more valid elements
++        return false;
++    }
++
++    public Element next() {
++        if (queue == null) {
++            queue = new LinkedList<Element>();
++            queue.addLast(doc.getRootElement());
++        }
++        // call hasNext() to be sure that the next item in queue is really valid
++        hasNext();
++        return processQueueOnce();
++    }
++    
++    private Element processQueueOnce() {
++        Element e = queue.removeFirst();
++        for (Object child : e.getChildren()) {
++            queue.addLast((Element)child);
++        }
++        return e;
++    }
++    
++    private boolean isValid(Element e) {
++        return interestingElementNames.contains(e.getName());
++    }
++    
++    public void remove() {
++        throw new UnsupportedOperationException();
++    }
++    
++}
+\ No newline at end of file
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/ElementToRenderableConverter.java	2010-09-08 01:08:52.565065801 +0800
+@@ -0,0 +1,25 @@
++package org.gk.gpml;
++
++import java.util.Collection;
++
++import org.gk.render.Renderable;
++import org.gk.render.RenderablePathway;
++import org.jdom.Element;
++
++/**
++ * Converts Elements of a GPML to Renderable. Classes with this interface must implement
++ * correct equals() behavior: a.equals(b) is true if and only if calls to a.convert() and
++ * b.convert() produce consistent identical result.
++ * @author leon
++ *
++ */
++
++public interface ElementToRenderableConverter {
++    /**
++     * 
++     * @param e the XML element to convert to its corresponding Renderable. It is not required
++     * that a Renderable corresponds to one element (the method can use DOM operations on e).
++     * @param collection add new Renderables to this collection
++     */
++    void convert(Element e, RenderablePathway diagram) throws ConverterException;
++}
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/GPML2010a.xsd	2010-09-08 01:08:58.480241549 +0800
+@@ -0,0 +1,538 @@
++<xsd:schema targetNamespace="http://genmapp.org/GPML/2010a"
++	xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
++	xmlns:gpml="http://genmapp.org/GPML/2010a"
++	elementFormDefault="qualified"
++	>
++
++	<!-- GenMAPP Pathway Markup Language version 2010a -->
++
++	<!-- Type Definitions -->	
++	<xsd:attributeGroup name="FontAttributes">
++		<xsd:attribute name="FontName" default="Arial"
++			type="xsd:string"/>
++		<xsd:attribute name="FontStyle" default="Normal">
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:string">
++					<xsd:enumeration value="Normal"/>
++					<xsd:enumeration value="Italic"/>
++				</xsd:restriction>
++			</xsd:simpleType>
++		</xsd:attribute>
++		<xsd:attribute name="FontDecoration" default="Normal">
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:string">
++					<xsd:enumeration value="Normal"/>
++					<xsd:enumeration value="Underline"/>
++				</xsd:restriction>
++			</xsd:simpleType>
++		</xsd:attribute>
++		<xsd:attribute name="FontStrikethru" default="Normal">
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:string">
++					<xsd:enumeration value="Normal"/>
++					<xsd:enumeration value="Strikethru"/>
++				</xsd:restriction>
++			</xsd:simpleType>
++		</xsd:attribute>
++		<xsd:attribute name="FontWeight" default="Normal">
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:string">
++					<xsd:enumeration value="Normal"/>
++					<xsd:enumeration value="Bold"/>
++				</xsd:restriction>
++			</xsd:simpleType>
++		</xsd:attribute>
++		<xsd:attribute name="FontSize" type="xsd:nonNegativeInteger"
++			default="12"/>
++		<xsd:attribute name="Align" default="Center">
++			<!-- Horizontal alignment -->
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:string">
++					<xsd:enumeration value="Left"/>
++					<xsd:enumeration value="Center"/>
++					<xsd:enumeration value="Right"/>
++				</xsd:restriction>
++			</xsd:simpleType>
++		</xsd:attribute>
++		<xsd:attribute name="Valign" default="Top">
++			<!-- Vertical alignment -->
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:string">
++					<xsd:enumeration value="Top"/>
++					<xsd:enumeration value="Middle"/>
++					<xsd:enumeration value="Bottom"/>
++				</xsd:restriction>
++			</xsd:simpleType>
++		</xsd:attribute>
++	</xsd:attributeGroup>
++
++	<xsd:attributeGroup name="RectAttributes">
++		<xsd:attribute name="CenterX" type="xsd:float" use="required"/>
++		<xsd:attribute name="CenterY" type="xsd:float" use="required"/>
++		<xsd:attribute name="Width" type="gpml:Dimension" use="required" />
++		<xsd:attribute name="Height" type="gpml:Dimension" use="required" />
++	</xsd:attributeGroup>
++
++	<xsd:attributeGroup name="ShapeStyleAttributes">
++		<xsd:attribute name="Color" type="gpml:ColorType" default="Black"/>
++		<xsd:attribute name="LineStyle" type="gpml:StyleType" default="Solid" />
++		<xsd:attribute name="LineThickness" type="xsd:float" default="1.0" />
++	</xsd:attributeGroup>
++
++	<!-- a rotation is either a float value or a string for each of the four right angles !-->
++	<xsd:simpleType name="RotationType">
++		<xsd:union>
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:string">
++					<xsd:enumeration value="Top"/> <!-- rotation of 0.0 !-->
++					<xsd:enumeration value="Right"/> <!-- rotation of 1/2 pi !-->
++					<xsd:enumeration value="Bottom"/> <!-- rotation of 1 pi !-->
++					<xsd:enumeration value="Left"/> <!-- rotation of 3/2 pi !-->
++				</xsd:restriction>
++			</xsd:simpleType>
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:float"/> <!-- rotation is always measured in radians !-->
++			</xsd:simpleType>
++		</xsd:union>
++		
++	</xsd:simpleType>
++
++	<xsd:simpleType name="ColorType">
++		<xsd:union>
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:hexBinary"/>
++			</xsd:simpleType>
++			<xsd:simpleType>
++				<xsd:restriction base="xsd:string">
++					<xsd:enumeration value="Aqua"/>
++					<xsd:enumeration value="Black"/>
++					<xsd:enumeration value="Blue"/>
++					<xsd:enumeration value="Fuchsia"/>
++					<xsd:enumeration value="Gray"/>
++					<xsd:enumeration value="Green"/>
++					<xsd:enumeration value="Lime"/>
++					<xsd:enumeration value="Maroon"/>
++					<xsd:enumeration value="Navy"/>
++					<xsd:enumeration value="Olive"/>
++					<xsd:enumeration value="Purple"/>
++					<xsd:enumeration value="Red"/>
++					<xsd:enumeration value="Silver"/>
++					<xsd:enumeration value="Teal"/>
++					<xsd:enumeration value="White"/>
++					<xsd:enumeration value="Yellow"/>
++					<xsd:enumeration value="Transparent"/>
++				</xsd:restriction>
++			</xsd:simpleType>
++		</xsd:union>
++	</xsd:simpleType>
++
++	<xsd:simpleType name="StyleType">
++		<xsd:restriction base="xsd:string">
++			<xsd:enumeration value="Solid"/>
++			<xsd:enumeration value="Broken"/>
++		</xsd:restriction>
++	</xsd:simpleType>
++
++	<!-- use Dimension for width and height, they can't be nagative !-->
++	<xsd:simpleType name="Dimension">
++		<xsd:restriction base="xsd:float">
++			<xsd:minInclusive value="0" />
++		</xsd:restriction>
++	</xsd:simpleType>
++
++	<!-- One or more comments - bundles GenMAPP notes and GenMAPP remarks together !-->
++	<xsd:group name="CommentGroup">
++		<xsd:sequence>
++			<xsd:element name="Comment" minOccurs="0"
++			maxOccurs="unbounded">
++				<xsd:complexType>
++					<xsd:simpleContent>
++						<xsd:extension base="xsd:string">
++							<xsd:attribute name="Source" type="xsd:string"/>
++						</xsd:extension>
++					</xsd:simpleContent>
++				</xsd:complexType>
++			</xsd:element>
++			<xsd:element name="PublicationXref" minOccurs="0" maxOccurs="unbounded">
++				<xsd:complexType>
++					<xsd:attribute name="ID" type="xsd:string" use="required"/>
++					<xsd:attribute name="Database" type="xsd:string" use="required"/>
++				</xsd:complexType>
++			</xsd:element>
++			<xsd:element name="BiopaxRef" minOccurs="0" maxOccurs="unbounded"/>		
++			<xsd:element name="Attribute" minOccurs="0"
++			maxOccurs="unbounded">
++				<xsd:complexType>
++					<xsd:attribute name="Key" type="xsd:string" use="required"/>
++					<xsd:attribute name="Value" type="xsd:string" use="required"/>
++				</xsd:complexType>
++			</xsd:element>
++		</xsd:sequence>
++	</xsd:group>
++	
++<!-- End: Type Definitions -->
++
++<!-- Pathway -->
++	<xsd:element name="Pathway">
++		<xsd:complexType>
++			<xsd:sequence>
++
++				<xsd:group ref="gpml:CommentGroup"/>
++				
++				<xsd:element name="Graphics" minOccurs="0" maxOccurs="1">
++					<xsd:complexType>
++						<xsd:attribute name="BoardWidth" type="gpml:Dimension"
++							use="required"/>
++						<xsd:attribute name="BoardHeight" type="gpml:Dimension"
++							use="required"/>
++					</xsd:complexType>
++				</xsd:element>
++
++				<xsd:element ref="gpml:DataNode" minOccurs="0" maxOccurs="unbounded"/>
++
++				<xsd:element ref="gpml:State" minOccurs="0" maxOccurs="unbounded"/>
++
++				<xsd:element ref="gpml:Line" minOccurs="0" maxOccurs="unbounded"/>
++
++				<xsd:element ref="gpml:Label" minOccurs="0" maxOccurs="unbounded"/>
++
++				<xsd:element ref="gpml:Shape" minOccurs="0" maxOccurs="unbounded"/>
++
++				<xsd:element ref="gpml:Group" minOccurs="0" maxOccurs="unbounded"/>
++
++				<xsd:element ref="gpml:InfoBox" minOccurs="1" maxOccurs="1" />
++				
++				<xsd:element ref="gpml:Legend" minOccurs="0" maxOccurs="1"/>
++
++				<xsd:element ref="gpml:Biopax" minOccurs="0" maxOccurs="1"/>
++			</xsd:sequence>
++
++			<xsd:attribute name="Name" type="xsd:string" use="required">
++				<!--  GenMAPP Pathway Title -->
++			</xsd:attribute>
++
++			<xsd:attribute name="Organism" type="xsd:string" use="optional">
++				<!-- Organism is not a field in the
++						GenMAPP database at this time, but we want to preserve this
++						information when importing maps, and also when exporting maps.
++						GenMAPP maps have the organism implied from the
++						filename. -->
++			</xsd:attribute>
++
++			<xsd:attribute name="Data-Source" type="xsd:string" use="optional">
++				<!-- On import to GenMAPP,
++						Data-Source value could be 'KEGG', 'Cytoscape', etc.  On export
++						from GenMAPP, value should be 'GenMAPP' with version
++						number. -->
++			</xsd:attribute>
++
++			<xsd:attribute name="Version" type="xsd:string" use="optional">
++				<!-- GenMAPP version, use for export
++					of maps from GenMAPP only. -->
++			</xsd:attribute>
++
++			<xsd:attribute name="Author" type="xsd:string" use="optional"/>
++
++			<xsd:attribute name="Maintainer" type="xsd:string" use="optional"/>
++
++			<xsd:attribute name="Email" type="xsd:string" use="optional"/>
++
++			<xsd:attribute name="License" type="xsd:string" use="optional"/>
++
++			<xsd:attribute name="Last-Modified" type="xsd:string" use="optional">
++				<!-- Last modification date, in the form of YYYYMMDD -->
++			</xsd:attribute>
++
++			<xsd:attribute name="BiopaxRef" type="xsd:string" use="optional" />
++
++		</xsd:complexType>
++	</xsd:element>
++<!-- End: Pathway -->
++
++
++<!-- Data Node -->
++	<xsd:element name="DataNode">
++
++		<!-- DataNode is the old GeneProduct, a gene in GenMAPP
++				terminology. -->
++		<xsd:complexType>
++
++			<xsd:sequence>
++
++				<xsd:group ref="gpml:CommentGroup"/>
++				
++				<xsd:element name="Graphics" minOccurs="1" maxOccurs="1">
++					<xsd:complexType>
++						<xsd:attributeGroup ref="gpml:RectAttributes"/>
++						<xsd:attributeGroup ref="gpml:FontAttributes"/>
++						<xsd:attributeGroup ref="gpml:ShapeStyleAttributes"/>
++						<xsd:attribute name="FillColor" type="gpml:ColorType" default="White"/>
++						<xsd:attribute name="ShapeType" type="xsd:string" default="Rectangle"/>
++						<xsd:attribute name="ZOrder" type="xsd:integer" use="optional"/>
++					</xsd:complexType>
++				</xsd:element>
++				<xsd:element name="Xref" minOccurs="1" maxOccurs="1">
++					<xsd:complexType>
++						<xsd:attribute name="Database" type="xsd:string" use="required"/>
++						<xsd:attribute name="ID" type="xsd:string" use="required"/>						
++					</xsd:complexType>
++				</xsd:element>
++			</xsd:sequence>
++			
++			<xsd:attribute name="BiopaxRef" type="xsd:string" use="optional" />
++            <xsd:attribute name="GraphId" type="xsd:ID" use="optional" />
++            <xsd:attribute name="GroupRef" type="xsd:string" use="optional" />
++
++			<xsd:attribute name="TextLabel" use="required" type="xsd:string"/>
++		
++			<xsd:attribute name="Type" type="xsd:string" default="Unknown">
++			<!-- Old versions of GPML only allowed these values for Type:
++				"Protein", "Rna", "Complex", "GeneProduct", "Metabolite" and "Unknown". 
++				It's recommended that you use these values as often as possible. -->
++			</xsd:attribute>
++
++		</xsd:complexType>
++
++	</xsd:element>
++<!-- End: DataNode -->
++
++<!-- State -->
++	<xsd:element name="State">
++		<xsd:complexType>
++			<xsd:sequence>
++				<xsd:group ref="gpml:CommentGroup"/>
++				<xsd:element name="Graphics" minOccurs="1" maxOccurs="1">
++					<xsd:complexType>
++						<xsd:attribute name="RelX" type="xsd:float" use="required"/>
++						<xsd:attribute name="RelY" type="xsd:float" use="required"/>
++						<xsd:attribute name="Width" type="gpml:Dimension" use="required" />
++						<xsd:attribute name="Height" type="gpml:Dimension" use="required" />
++						<xsd:attributeGroup ref="gpml:ShapeStyleAttributes"/>
++						<xsd:attribute name="FillColor" type="gpml:ColorType" default="White"/>
++						<xsd:attribute name="ShapeType" type="xsd:string" default="Rectangle"/>
++						<xsd:attribute name="ZOrder" type="xsd:integer" use="optional"/>
++					</xsd:complexType>
++				</xsd:element>
++				<xsd:element name="Xref" minOccurs="0" maxOccurs="1">
++					<xsd:complexType>
++						<xsd:attribute name="Database" type="xsd:string" use="required"/>
++						<xsd:attribute name="ID" type="xsd:string" use="required"/>						
++					</xsd:complexType>
++				</xsd:element>
++			</xsd:sequence>
++			
++			<xsd:attribute name="BiopaxRef" type="xsd:string" use="optional" />
++            <xsd:attribute name="GraphId" type="xsd:ID" use="optional" />
++			<xsd:attribute name="GraphRef" type="xsd:IDREF" use="optional" />
++			
++			<xsd:attribute name="TextLabel" use="required" type="xsd:string"/>
++		
++			<xsd:attribute name="StateType" type="xsd:string" default="Unknown"/>
++			<!-- Biological modification type. suggested values: Phosphorylated, Glycosylated, Activated, ... !-->
++
++		</xsd:complexType>
++
++	</xsd:element>
++<!-- End: State -->
++
++<!-- Line -->
++	<xsd:element name="Line">
++
++		<xsd:complexType>
++
++			<xsd:sequence>
++
++				<xsd:group ref="gpml:CommentGroup" />
++
++				<xsd:element name="Graphics" minOccurs="1"
++					maxOccurs="1">
++					<xsd:complexType>
++						<xsd:sequence>
++							<xsd:element name="Point" minOccurs="2"
++								maxOccurs="unbounded">
++								<xsd:complexType>
++									<xsd:attribute name="X"
++										type="xsd:float" use="required" />
++									<xsd:attribute name="Y"
++										type="xsd:float" use="required" />
++									<!-- relX and relY are the coordinates used when
++									a point is linked to another object (when GraphRef
++									is defined). They represent he coordinates of the 
++									point relative to the object that it's linked to, where
++									0,0 lies at the center of the object and 1,1 at the bottom-right
++									corner -->
++									<xsd:attribute name="RelX"
++										type="xsd:float" use="optional" />
++									<xsd:attribute name="RelY"
++										type="xsd:float" use="optional" />
++									<xsd:attribute name="GraphRef"
++										type="xsd:IDREF" use="optional" />
++									<xsd:attribute name="GraphId"
++										type="xsd:ID" use="optional" />
++									<!-- 
++									Note: only the ArrowHead attribute on first and last points are used, the rest is ignored.
++										!-->
++									<xsd:attribute name="ArrowHead"
++										default="Line" type="xsd:string" />
++								</xsd:complexType>
++							</xsd:element>
++							<xsd:element name="Anchor" minOccurs="0" maxOccurs="unbounded">
++								<xsd:complexType>
++									<xsd:attribute name="Position"
++										type="xsd:float" use="required" />
++									<xsd:attribute name="GraphId"
++										type="xsd:ID" use="optional" />
++									<xsd:attribute name="Shape"
++										default="ReceptorRound" type="xsd:string" />
++								</xsd:complexType>
++							</xsd:element>
++						</xsd:sequence>
++						<xsd:attribute name="Color"
++							type="gpml:ColorType" default="Black" />
++						<xsd:attribute name="LineThickness" type="xsd:float"/>
++						<xsd:attribute name="LineStyle" type="gpml:StyleType"
++							default="Solid" />
++						<xsd:attribute name="ConnectorType"
++							type="xsd:string" use="optional" default="Straight"/>
++						<xsd:attribute name="ZOrder"
++							type="xsd:integer" use="optional"/>
++					</xsd:complexType>
++				</xsd:element>
++
++			</xsd:sequence>
++
++			<xsd:attribute name="GroupRef" type="xsd:string"
++				use="optional" />
++			<xsd:attribute name="BiopaxRef" type="xsd:string"
++				use="optional" />
++
++			<xsd:attribute name="GraphId" type="xsd:ID" use="optional" />
++		</xsd:complexType>
++
++	</xsd:element>
++<!-- End: Line -->
++
++<!-- Label -->
++	<xsd:element name="Label">
++
++		<xsd:complexType>
++			<!--  This is text on a GenMAPP map that
++				can have associated comments. -->
++
++			<xsd:sequence>
++
++				<xsd:group ref="gpml:CommentGroup"/>
++
++				<xsd:element name="Graphics" minOccurs="1" maxOccurs="1">
++					<xsd:complexType>
++						<xsd:attributeGroup ref="gpml:RectAttributes"/>
++						<xsd:attributeGroup ref="gpml:FontAttributes" />
++						<xsd:attributeGroup ref="gpml:ShapeStyleAttributes" />
++						<xsd:attribute name="FillColor" type="gpml:ColorType" default="Transparent"/>
++						<xsd:attribute name="ShapeType" type="xsd:string" default="None"/>
++						<xsd:attribute name="ZOrder" type="xsd:integer" use="optional"/>
++					</xsd:complexType>
++				</xsd:element>
++
++			</xsd:sequence>
++			
++			<!-- for a reference to a url !-->
++			<xsd:attribute name="Href" use="optional" type="xsd:string" />
++			
++			<xsd:attribute name="BiopaxRef" type="xsd:string" use="optional" />
++			<xsd:attribute name="GraphId" type="xsd:ID" use="optional" />
++			<xsd:attribute name="GroupRef" type="xsd:string" use="optional" />
++
++			<xsd:attribute name="TextLabel" use="required" type="xsd:string"/>			
++		</xsd:complexType>
++
++	</xsd:element>
++<!-- End: Label -->
++
++<!-- Shape -->
++	<xsd:element name="Shape">
++
++		<xsd:complexType>
++
++			<xsd:sequence>
++
++				<xsd:group ref="gpml:CommentGroup" />
++
++				<xsd:element name="Graphics" minOccurs="1" maxOccurs="1">
++					<xsd:complexType>
++						<xsd:attributeGroup ref="gpml:RectAttributes"/>
++						<xsd:attributeGroup ref="gpml:FontAttributes" />
++						<xsd:attributeGroup ref="gpml:ShapeStyleAttributes" />
++						<xsd:attribute name="FillColor" type="gpml:ColorType" default="Transparent"/>
++						<xsd:attribute name="ShapeType" type="xsd:string" use="required"/>
++						<xsd:attribute name="ZOrder" type="xsd:integer" use="optional"/>
++						<xsd:attribute name="Rotation" type="gpml:RotationType" default="Top" />
++					</xsd:complexType>
++				</xsd:element>
++
++			</xsd:sequence>
++
++			<xsd:attribute name="BiopaxRef" type="xsd:string" use="optional" />
++			<xsd:attribute name="GraphId" type="xsd:ID" use="optional" />
++			<xsd:attribute name="GroupRef" type="xsd:string" use="optional" />
++
++			<xsd:attribute name="TextLabel" use="optional" type="xsd:string"/>
++
++		</xsd:complexType>
++
++	</xsd:element>
++<!-- End: Shape -->
++
++<!-- Group -->
++
++	<xsd:element name="Group">	
++		<xsd:complexType>
++			<xsd:sequence>
++				<xsd:group ref="gpml:CommentGroup" />
++			</xsd:sequence>
++			<xsd:attribute name="BiopaxRef" type="xsd:string"
++				use="optional" />
++			<xsd:attribute name="GroupId" type="xsd:string" use="required" />
++			<xsd:attribute name="GroupRef" type="xsd:string"
++				use="optional" />
++			<xsd:attribute name="Style" type="xsd:string" default="None" />
++			<xsd:attribute name="TextLabel" type="xsd:string"
++				use="optional" />
++			<xsd:attribute name="GraphId" type="xsd:ID" use="optional" />
++		</xsd:complexType>
++	</xsd:element>
++
++<!-- InfoBox -->
++	<xsd:element name="InfoBox">
++		<!-- InfoBox element holds the
++			coordinates on the GenMAPP layout where the Information kept in the
++			Info table will be displayed in the mapp. -->
++	
++		<xsd:complexType>
++			<xsd:attribute name="CenterX" type="xsd:float" use="required"/>
++			<xsd:attribute name="CenterY" type="xsd:float" use="required"/>
++		</xsd:complexType>
++	</xsd:element>
++<!-- End: InfoBox -->
++
++<!-- Legend -->
++	<xsd:element name="Legend">	
++		<xsd:complexType>
++			<xsd:attribute name="CenterX" type="xsd:float" use="required"/>
++			<xsd:attribute name="CenterY" type="xsd:float" use="required"/>
++		</xsd:complexType>
++	</xsd:element>
++<!-- End: Legend -->
++
++<!-- Biopax -->
++	<xsd:element name="Biopax">
++		<xsd:complexType>
++			<xsd:sequence>
++				<xsd:any namespace="http://www.biopax.org/release/biopax-level3.owl#"
++					processContents="skip" minOccurs="0" maxOccurs="unbounded"/>
++			</xsd:sequence>
++		</xsd:complexType>
++	</xsd:element>
++<!-- End: Biopax -->
++
++</xsd:schema>
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/GPMLToReactomeConverter.java	2010-09-08 01:09:04.960461659 +0800
+@@ -0,0 +1,289 @@
++package org.gk.gpml;
++
++import java.awt.Dimension;
++import java.awt.Font;
++import java.awt.Graphics;
++import java.awt.Rectangle;
++import java.awt.image.BufferedImage;
++import java.io.BufferedReader;
++import java.io.File;
++import java.io.FileReader;
++import java.io.IOException;
++import java.io.StringReader;
++import java.sql.SQLException;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++
++import javax.swing.JFrame;
++
++import org.gk.gkEditor.ZoomablePathwayEditor;
++import org.gk.graphEditor.PathwayEditor;
++import org.gk.model.GKInstance;
++import org.gk.persistence.MySQLAdaptor;
++import org.gk.render.RenderablePathway;
++import org.jdom.Document;
++import org.jdom.Element;
++import org.jdom.JDOMException;
++import org.jdom.input.SAXBuilder;
++
++public class GPMLToReactomeConverter {
++    private MySQLAdaptor adaptor;
++    private String gpmlSource;
++    private List<ElementGuesser> guessers;
++    private String atxml;
++    private RenderablePathway renderedDiagram;
++    
++    static {
++        //register core ElementGuessers
++        ClassRegistry registry = ClassRegistry.getRegistry(ElementGuesser.class);
++        registry.register(ReactomeElementGuesser.class);
++    }
++    
++    public GPMLToReactomeConverter() {
++        //TODO
++    }
++    
++    public GPMLToReactomeConverter(String src) {
++        this();
++        setGPMLSource(src);
++    }
++    
++    public GPMLToReactomeConverter(File aFile) throws IOException {
++        StringBuilder contents = new StringBuilder();
++        //use buffering, reading one line at a time
++        //FileReader always assumes default encoding is OK!
++        BufferedReader input =  new BufferedReader(new FileReader(aFile));
++        try {
++            String line = null; //not declared within while loop
++            while (( line = input.readLine()) != null){
++                contents.append(line);
++                contents.append(System.getProperty("line.separator"));
++            }
++        }
++        finally {
++            // input.close() also throws IOException, hence the double try block
++            input.close();
++        }
++        
++        
++        gpmlSource = contents.toString();
++    }
++    
++    public List<ElementGuesser> getGuessers() {
++        return guessers;
++    }
++
++    public void setGuessers(List<ElementGuesser> guessers) {
++        this.guessers = guessers;
++    }
++    
++    public MySQLAdaptor getAdaptor() {
++        return adaptor;
++    }
++
++    public void setAdaptor(MySQLAdaptor adaptor) {
++        this.adaptor = adaptor;
++    }
++    
++    public void setGPMLSource(String src) {
++        this.gpmlSource = src;
++    }
++    
++    public String getGPMLSource() {
++        return gpmlSource;
++    }
++    
++    public RenderablePathway getRenderedDiagram() {
++        return renderedDiagram;
++    }
++    
++    /**
++     * Perform conversion to reactome format. Transparently called by public methods such as getEntities() or
++     * getATXML(). You may want to call this directly to refresh the internal cache, e.g. if you setGPMLSource()
++     * to reuse an instance of this class. At least a call setGPMLSource() or using a proper constructor is needed
++     * before calling this method.
++     * 
++     * The conversion result is stored in an internal cache and can be retrieved using getATXML() and
++     * getInstances().
++     * 
++     * @return true if conversion is a success, false otherwise (empty values will be returned by getATXML() etc.
++     * in case of conversion failure)
++     */
++    public boolean convert() {
++        if (gpmlSource == null) {
++            return false;
++        }
++        
++        if (guessers == null) {
++            guessers = new ArrayList<ElementGuesser>();
++            // default to use all guessers available
++            for (Object guesserObject : ClassRegistry.getRegistry(ElementGuesser.class).getSingletons()) {
++                guessers.add((ElementGuesser) guesserObject);
++            }
++        }
++        
++        Document inputDoc;
++        try {
++            SAXBuilder builder = new SAXBuilder();
++            inputDoc = builder.build(new StringReader(gpmlSource));
++        } catch (JDOMException e1) {
++            e1.printStackTrace();
++            return false;
++        } catch (IOException e1) {
++            e1.printStackTrace();
++            return false;
++        }
++        
++        
++        Document outputDoc = new Document();
++        
++        //build a map of ElementGuesser interested in specific Elements
++        Map<String, List<ElementGuesser>> interests = new HashMap<String, List<ElementGuesser>>();
++        for (ElementGuesser guesser : guessers) {
++            for (String elementName : guesser.getElementNamesOfInterest()) {
++                if (interests.get(elementName) == null) {
++                    interests.put(elementName, new ArrayList<ElementGuesser>());
++                }
++                interests.get(elementName).add(guesser);
++            }
++        }
++        
++        renderedDiagram = new RenderablePathway();
++        
++        // Iterate through all interesting elements, determine the best converter for the particular element
++        // and invoke it. This logic is made to ensure that future implementations will always augment existing
++        // conversion code, and a GPML with more than one convention in place can be converted.
++        ElementIterator elementIterator = new ElementIterator(inputDoc, interests.keySet());
++        while (elementIterator.hasNext()) {
++            Element e = elementIterator.next();
++            List<ElementGuesser> candidates = interests.get(e.getName());
++            if (candidates != null) {
++                // determine the best converter for the particular element
++                ElementToRenderableConverter converter = getBestRenderableConverter(e, candidates);
++                try {
++                    converter.convert(e, renderedDiagram);
++                }
++                catch (ConverterException ex) {
++                    ex.printStackTrace();
++                }
++                
++            }
++        }
++        
++        
++        return true;
++    }
++    
++    /**
++     * Determines the best converter for the particular element.
++     * @param e element to match
++     * @param candidates ElementGuessers to pick from
++     * @return the ElementGuesser that has highest chance to convert e correctly
++     */
++    private ElementToRenderableConverter getBestRenderableConverter (Element e, List<ElementGuesser> candidates) {
++        Map<ElementToRenderableConverter, Double> converterConfidences = new HashMap<ElementToRenderableConverter, Double>();
++        Map.Entry<ElementToRenderableConverter, Double> bestEntry = null;
++        
++        for (ElementGuesser guesser : candidates) {
++            Map<ElementToRenderableConverter, Double> returnValue = guesser.guess(e, this);
++            for (Map.Entry<ElementToRenderableConverter, Double> entry : returnValue.entrySet()) {
++                Double confidenceValue = converterConfidences.get(entry.getKey());
++                if (confidenceValue == null) {
++                    confidenceValue = entry.getValue();
++                }
++                else {
++                    confidenceValue += entry.getValue();
++                }
++                converterConfidences.put(entry.getKey(), confidenceValue);
++                if ((bestEntry == null) || (confidenceValue > bestEntry.getValue())) {
++                    bestEntry = entry;
++                }
++            }
++        }
++        //System.out.println(":bestEntry:" + bestEntry.getKey() + ":" + bestEntry.getValue());
++        return bestEntry.getKey();
++    }
++    
++    /**
++     * Returns the ATXML representation of the GPML format.
++     */
++    public String getATXML() {
++        if (atxml == null) {
++            convert();
++        }
++        return atxml;
++    }
++    
++    /**
++     * Returns all reactome instances present in the diagram.
++     */
++    public List<GKInstance> getInstances() {
++        //TODO
++        return null;
++    }
++    
++    private static final Font DEFAULT_FONT = new Font("Dialog", Font.PLAIN, 12);
++    
++    private static void printUsage() {
++        System.out.println("Usage: java org.gk.gpml.GPMLToReactomeConverter dbhost dbName user pwd port gpmlfile");
++    }
++    
++    /**
++     * This utility script accepts a GPML file and displays the pathway diagram in a JFrame. The pathway diagram is
++     * alreadi in Renderable objects format.
++     * @param args
++     */
++    public static void main(String[] args) {
++        if (args.length != 6) {
++            printUsage();
++            System.exit(1);
++        }
++        
++        GPMLToReactomeConverter converter = null;
++        
++        try {
++            converter = new GPMLToReactomeConverter(new File(args[5]));
++        } catch (IOException ex) {
++            System.err.println(ex.getLocalizedMessage());
++            System.exit(1);
++        }
++        
++        try {
++            MySQLAdaptor adaptor = new MySQLAdaptor(args[0],
++                    args[1],
++                    args[2], 
++                    args[3],
++                    Integer.parseInt(args[4]));
++            converter.setAdaptor(adaptor);
++        } catch (SQLException ex) {
++            System.err.println(ex.getLocalizedMessage());
++            System.exit(1);
++        }
++        converter.convert();
++        
++        //Create and set up the window.
++        ZoomablePathwayEditor zoomableEditor= new ZoomablePathwayEditor();
++        PathwayEditor editor = zoomableEditor.getPathwayEditor();
++        editor.setRenderable(converter.renderedDiagram);
++        Dimension size = editor.getPreferredSize();
++        BufferedImage image = new BufferedImage(size.width, size.height, BufferedImage.TYPE_3BYTE_BGR);
++        Graphics g = image.createGraphics();
++        g.setFont(DEFAULT_FONT);
++        // Need to set clip with the whole size so that everything can be drawn
++        Rectangle clip = new Rectangle(size);
++        g.setClip(clip);
++        editor.paint(g);
++        
++        
++        JFrame frame = new JFrame("Converter");
++        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
++        frame.setContentPane(zoomableEditor);
++        //Display the window.
++        frame.pack();
++        frame.setVisible(true);
++        
++        
++    }
++}
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeElementGuesser.java	2010-09-08 01:09:11.244505496 +0800
+@@ -0,0 +1,256 @@
++package org.gk.gpml;
++
++import java.awt.Point;
++import java.awt.Rectangle;
++import java.awt.geom.Rectangle2D;
++import java.io.ByteArrayInputStream;
++import java.io.ByteArrayOutputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.Collection;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++
++import org.gk.render.HyperEdge;
++import org.gk.render.RenderableEntity;
++import org.gk.render.RenderablePathway;
++import org.gk.render.RenderableReaction;
++import org.jdom.Document;
++import org.jdom.Element;
++import org.jdom.output.XMLOutputter;
++import org.pathvisio.model.GpmlFormat;
++import org.pathvisio.model.ObjectType;
++import org.pathvisio.model.Pathway;
++import org.pathvisio.model.PathwayElement;
++import org.pathvisio.model.PathwayElement.MPoint;
++
++
++/**
++ * An ElementGuesser that converts elements conforming to Reactome GPML convention (i.e. GPML files converted from
++ * org.gk.gpml.ReactomeToGPMLConverter). These elements have "_REACTOME_" inside their graphId or groupId, followed by
++ * its corresponding Reactome database ID.
++ * @author leon
++ *
++ */
++public class ReactomeElementGuesser implements ElementGuesser {
++    // use Document.hashCode() for key
++    private static Map<Integer, Pathway> pathwayCache = new HashMap<Integer, Pathway>();
++    
++    public List<String> getElementNamesOfInterest() {
++        return Arrays.asList(GPMLConstants.Group);
++    }
++    
++    public Map<ElementToRenderableConverter, Double> guess(Element e, GPMLToReactomeConverter converter) {
++        String name = e.getName();
++        HashMap<ElementToRenderableConverter, Double> ret = new HashMap<ElementToRenderableConverter, Double>();
++        if (name.equals(GPMLConstants.Group)) {
++            //A reactome reaction
++            double p = 0.0;
++            if (e.getAttributeValue(GPMLConstants.GroupId).contains("_REACTOME_")) {
++                p += 0.5;
++            }
++            if (e.getChild(GPMLConstants.Comment, e.getNamespace()).getAttributeValue(GPMLConstants.Source).equals("Reactome summation")) {
++                p += 0.4;
++            }
++            if (e.getAttributeValue(GPMLConstants.Style).equals(GPMLConstants.Group) && (e.getAttributeValue(GPMLConstants.TextLabel) != null)) {
++                p += 0.1;
++            }
++            ret.put(new GroupToReactionConverter(converter), p);
++            
++        }
++        return ret;
++    }
++    
++    private class GroupToReactionConverter implements ElementToRenderableConverter {
++        GPMLToReactomeConverter converter;
++        
++        public GroupToReactionConverter(GPMLToReactomeConverter converter) {
++            this.converter = converter;
++        }
++        
++        public void convert(Element e, RenderablePathway diagram)
++                throws ConverterException {
++            // note: carefully read the import statements. "Pathway" and "Converter" are terms commonly used in both pathvisio and reactome, so classes may belong to either one
++            Document doc = e.getDocument();
++            Pathway pwy = pathwayCache.get(doc.hashCode());
++            if (pwy == null) {
++                try {
++                    // this Pathway is of pathvisio
++                    Pathway newPwy = new Pathway();
++                    XMLOutputter outputter = new XMLOutputter();
++                    ByteArrayOutputStream oStream = new ByteArrayOutputStream();
++                    outputter.output(doc, oStream);
++                    InputStream inStream = new ByteArrayInputStream(oStream.toByteArray());
++                    GpmlFormat.readFromXml(newPwy, inStream, false);
++                    pathwayCache.put(doc.hashCode(), newPwy);
++                    pwy = newPwy;
++                }
++                catch (IOException ex) {
++                    ex.printStackTrace();
++                    return;
++                }
++                catch (org.pathvisio.model.ConverterException ex) {
++                    ex.printStackTrace();
++                    return;
++                }
++            }
++            
++            
++            String groupId = e.getAttributeValue(GPMLConstants.GroupId);
++            // pv stands for pathvisio
++            PathwayElement pvGroup = pwy.getGroupById(groupId);
++           
++            // get the inputs, outputs, and catalysts for each line in the group, using org.pathvisio.util.Relation
++            
++            ReactomeRelation relation = new ReactomeRelation();
++            relation.setBackboneGroup(pvGroup);
++            
++            for (PathwayElement pvElement : pwy.getGroupElements(groupId)) {
++                if (pvElement.getObjectType() == ObjectType.LINE) {
++                    
++                    relation.buildRelations(pvElement);
++                }
++            }
++            /*
++            System.out.println("Reaction "+pvGroup.getTextLabel() + " has: ");
++            testPrint(relation, relation.getLefts(), "in :");
++            testPrint(relation, relation.getRights(), "out:");
++            testPrint(relation, relation.getMediators(), "cat:");
++            */
++            
++            Set<PathwayElement> nodes = new HashSet<PathwayElement>(relation.getLefts());
++            nodes.addAll(relation.getRights());
++            nodes.addAll(relation.getMediators());
++            for (PathwayElement pe : nodes) {
++                convertToRenderable(pe, diagram);
++            }
++            
++            HyperEdge edge = new RenderableReaction();
++            
++            try {
++                List<Point> pointList = pvLineToPoints(pwy.getGroupElements(groupId));
++                edge.setPosition(pointList.get(0));
++                edge.setBackbonePoints(pointList);
++                diagram.addComponent(edge);
++                edge.setDisplayName(e.getAttributeValue("TextLabel"));
++                
++            }
++            catch (Exception ex) {
++                ex.printStackTrace();
++            }
++            edge.setInputPoints(getBranchPoints(relation.getLefts(), relation.getLines()));
++            edge.setOutputPoints(getBranchPoints(relation.getRights(), relation.getLines()));
++            edge.setActivatorPoints(getBranchPoints(relation.getMediators(), relation.getLines()));
++            
++        }
++        
++        private RenderableEntity convertToRenderable(PathwayElement pe, RenderablePathway diagram) {
++            RenderableEntity entity = new RenderableEntity();
++            entity.setBounds(toRectangle(pe.getMBounds()));
++            entity.setDisplayName(pe.getTextLabel());
++            if (diagram != null) {
++                diagram.addComponent(entity);
++            }
++            return entity;
++        }
++        
++        private Rectangle toRectangle(Rectangle2D r) {
++            // TODO Auto-generated method stub
++            return new Rectangle((int)r.getX(), (int)r.getY(), (int)r.getWidth(), (int)r.getHeight());
++        }
++
++        private List<Point> pvLineToPoints(Collection<PathwayElement> lines) {
++            List<Point> out = new ArrayList<Point>();
++            //sort the lines
++            //List<PathwayElement> sortedLines = new ArrayList<PathwayElement>(lines);
++            
++            // Map<current line, next line>
++            Map<PathwayElement, PathwayElement> nextLineMatrix = new HashMap<PathwayElement, PathwayElement>();
++            Set<PathwayElement> firstLineCandidates = new HashSet<PathwayElement>(lines);
++            for (PathwayElement line : lines) {
++                for (PathwayElement testLine : lines) {
++                    if (isSamePoint(line.getMEnd(), testLine.getMStart()) && line != testLine) {
++                        nextLineMatrix.put(line, testLine);
++                        // because testLine already has a line before it, it can no longer be a "first line"
++                        firstLineCandidates.remove(testLine);
++                        break;
++                    }
++                }
++            }
++            if (firstLineCandidates.size() != 1) {
++                throw new IllegalStateException("Lines are not connected or have branches");
++            }
++            
++            // get the first line as the current line
++            PathwayElement currentLine = firstLineCandidates.iterator().next();
++            out.add(new Point((int) currentLine.getMStartX(), (int)currentLine.getMStartY()));
++            do {
++                //System.out.print(currentLine.getGraphId() + " ");
++                out.add(new Point((int) currentLine.getMEndX(), (int)currentLine.getMEndY()));
++            } while ((currentLine = nextLineMatrix.get(currentLine)) != null);
++            //System.out.println();
++            
++            return out;
++        }
++        
++        
++        
++        private boolean isSamePoint(MPoint a, MPoint b) {
++            return isSameDouble(a.getX(), b.getX()) && isSameDouble(a.getY(), b.getY()); 
++        }
++        
++        private boolean isSameDouble(double a, double b) {
++            return Math.abs(a - b) < 0.0000001;
++        }
++        
++        private List<List<Point>> getBranchPoints (Collection<PathwayElement> nodeSet, Map<PathwayElement, List<PathwayElement>> lineMap){
++            List<List<Point>> masterList = new ArrayList<List<Point>>();
++            for (PathwayElement pe : nodeSet) {
++                try {
++                
++                List<PathwayElement> lines = lineMap.get(pe);
++                List<Point> points = pvLineToPoints(lines);
++                masterList.add(points);
++                }
++                catch (IllegalStateException ex) {
++                    System.err.println(ex.getLocalizedMessage());
++                }
++            }
++            return masterList;
++        }
++        
++        private void testPrint(ReactomeRelation relation, Set<PathwayElement> pvs, String label) {
++            for (PathwayElement pve : pvs) {
++                System.out.print(label+pve.getTextLabel().replace("\n", "")
++                        +" [dbid "+getDbIdFromGraphId(pve.getGraphId())+"] ");
++                for (PathwayElement line : relation.getLines().get(pve)) {
++                    System.out.print(line.getGraphId() + " ");
++                }
++                System.out.println();
++            }
++        }
++        
++        private Long getDbIdFromGraphId(String graphId) {
++            try {
++                Pattern pattern = Pattern.compile("^.*_REACTOME_([0-9]+)$");
++                Matcher matcher = pattern.matcher(graphId);
++                matcher.find();
++                return new Long(matcher.group(1));
++            }
++            catch (IllegalStateException ex) {
++                return null;
++            }
++        }
++    }
++    
++}
++
++
++
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeRelation.java	2010-09-08 01:09:17.447836240 +0800
+@@ -0,0 +1,272 @@
++// PathVisio,
++// a tool for data visualization and analysis using Biological Pathways
++// Copyright 2006-2009 BiGCaT Bioinformatics
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++package org.gk.gpml;
++
++import java.util.ArrayList;
++import java.util.Collection;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.LinkedList;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++
++import org.pathvisio.debug.Logger;
++import org.pathvisio.model.LineStyle;
++import org.pathvisio.model.LineType;
++import org.pathvisio.model.ObjectType;
++import org.pathvisio.model.Pathway;
++import org.pathvisio.model.PathwayElement;
++import org.pathvisio.model.GraphLink.GraphRefContainer;
++import org.pathvisio.model.PathwayElement.MAnchor;
++import org.pathvisio.model.PathwayElement.MPoint;
++
++/**
++ * This class is modified from org.pathvisio.util.Relation.
++ * 
++ * Class to parse a relation between GPML objects, e.g. a biochemical reaction.
++ * A relation can be created from a line that connects two objects
++ * of type datanode, shape or label.
++ * The following fields will be created:
++ * - LEFT: an element that acts on the left side of an interaction (i.e. inputs)
++ * - RIGHT: an element that acts on the right side of an interaction (i.e. outputs)
++ * - MEDIATOR: an element that acts as mediator of an interaction (i.e. activators, inhibitors)
++ * 
++ * Once a line is fed into this class, all line segments connecting to it will be evaluated; therefore
++ * one instance of ReactomeRelation corresponds to one Reactome reaction (RenderableReaction).
++ * 
++ * See evaluateMPoint() method for the heuristics employed to differentiate between lefts, rights,
++ * and mediators.
++ * 
++ *
++ * Additionally, if the element to be added is a group, all nested elements will
++ * be added recursively.
++ *
++ * So in the example, the following fields will be created:
++ * A: LEFT
++ * D: LEFT
++ * F: MEDIATOR
++ * C: MEDIATOR
++ * C1:MEDIATOR
++ * C2:MEDIATOR
++ * E: RIGHT
++ * B: RIGHT
++ *
++ * @author thomas
++ */
++public class ReactomeRelation {
++    private Set<PathwayElement> lefts = new HashSet<PathwayElement>();
++    private Set<PathwayElement> rights = new HashSet<PathwayElement>();
++    private Set<PathwayElement> mediators = new HashSet<PathwayElement>();
++    private Set<PathwayElement> traversedLines = new HashSet<PathwayElement>();
++    
++    private Map<PathwayElement, List<PathwayElement>> lines = new HashMap<PathwayElement, List<PathwayElement>>();
++    
++    public Map<PathwayElement, List<PathwayElement>> getLines() {
++        return lines;
++    }
++    
++    /* code for debugging purpose
++    private class CustomLinkedList extends LinkedList<PathwayElement> {
++        public void addLast(PathwayElement e) {
++            for (int i = 0; i < this.size(); i++) System.out.print(" ");
++            super.addLast(e);
++            System.out.println("add "+e.getGraphId());
++        }
++        public PathwayElement removeLast() {
++            PathwayElement e = super.removeLast();
++            for (int i = 0; i < this.size(); i++) System.out.print(" ");
++            System.out.println("rem "+e.getGraphId());
++            return e;
++        }
++    }
++    private LinkedList<PathwayElement> lineStack = new CustomLinkedList();
++    */
++    
++    private LinkedList<PathwayElement> lineStack = new LinkedList<PathwayElement>();
++    
++    public ReactomeRelation() {
++        
++    }
++    
++    /**
++     * Parse a relation.
++     * @param relationLine The line that defines the relation.
++     */
++    public ReactomeRelation(PathwayElement relationLine) {
++        buildRelations(relationLine);
++    }
++    
++    public void buildRelations(PathwayElement relationLine) {
++        if(relationLine.getObjectType() != ObjectType.LINE) {
++            throw new IllegalArgumentException("Object type should be line!");
++        }
++        Pathway pathway = relationLine.getParent();
++        if(pathway == null) {
++            throw new IllegalArgumentException("Object has no parent pathway");
++        }
++        if(traversedLines.contains(relationLine)) {
++            // line has been traversed before so do not process again
++            //System.out.println("x "+relationLine.getGraphId());
++            return;
++        }
++        traversedLines.add(relationLine);
++        //System.out.println(relationLine.getGraphId() + "::" + relationLine.getStartGraphRef() + ":"+pathway.getReferringObjects(relationLine.getStartGraphRef())+":"+relationLine.getEndGraphRef() + " ");
++        
++        Set<GraphRefContainer> grc = new HashSet<GraphRefContainer>();
++        
++        //Find all connecting lines (via anchors)
++        for(MAnchor ma : relationLine.getMAnchors()) {
++            //evaluateGRCList(pathway, ma.getReferences());
++            grc.addAll(ma.getReferences());
++        }
++        grc.add(relationLine.getMStart());
++        grc.add(relationLine.getMEnd());
++        evaluateGRCList(pathway, grc, relationLine);
++    }
++    
++    private void evaluateGRCList(Pathway pathway, Collection<GraphRefContainer> grcCollection, PathwayElement line) {
++        for(GraphRefContainer grc : grcCollection) {
++            if(grc instanceof MPoint) {
++                MPoint mp = (MPoint)grc;
++                //System.out.println("anchor "+ma.getGraphId()+" " + ma.getPosition()+" mp "+mp.getX()+" "+mp.getY()+" "+mp.getGraphId());
++                evaluateMPoint(pathway, mp);
++            } else {
++                Logger.log.warn("unsupported GraphRefContainer: " + grc);
++            }
++        }
++    }
++    
++    private void evaluateMPoint(Pathway pathway, MPoint mp) {
++        PathwayElement line = mp.getParent();
++        lineStack.addLast(line);
++        
++        if(line.getMStart().isLinked()) {
++            if (line.getStartLineType() == LineType.ARROW) {
++                addRight(pathway.getElementById(line.getMStart().getGraphRef()));
++            }
++            else if (line.getLineStyle() == LineStyle.DASHED) {
++                addMediator(pathway.getElementById(line.getMStart().getGraphRef()));
++            }
++            else {
++                addLeft(pathway.getElementById(line.getMStart().getGraphRef()));
++            }
++        }
++        
++        if(line.getMEnd().isLinked()) {
++            if (line.getEndLineType() == LineType.ARROW) {
++                addRight(pathway.getElementById(line.getMEnd().getGraphRef()));
++            }
++            else if (line.getLineStyle() == LineStyle.DASHED) {
++                addMediator(pathway.getElementById(line.getMEnd().getGraphRef()));
++            }
++            else {
++                addLeft(pathway.getElementById(line.getMEnd().getGraphRef()));
++            }
++        }
++        
++        evaluatePrePost(pathway, pathway.getReferringObjects(line.getStartGraphRef()));
++        evaluatePrePost(pathway, pathway.getReferringObjects(line.getEndGraphRef()));
++        lineStack.removeLast();
++    }
++    
++    private void evaluatePrePost(Pathway pathway, Collection<GraphRefContainer> grcCollection) {
++        for(GraphRefContainer grc : grcCollection) {
++            if(grc instanceof MPoint) {
++                MPoint mp = (MPoint)grc;
++                //System.out.println("anchor "+ma.getGraphId()+" " + ma.getPosition()+" mp "+mp.getX()+" "+mp.getY()+" "+mp.getGraphId());
++                // build relation for a line that is referred by this point
++                //System.out.print(mp.getGraphId()+ "***"+mp.getGraphRef()+"---"+pathway.getElementById(mp.getGraphRef())+" ");
++                Object anchorCandidate = pathway.getGraphIdContainer(mp.getGraphRef());
++                //System.out.println(anchorCandidate);
++                if (anchorCandidate instanceof MAnchor) {
++                    MAnchor anchor = (MAnchor) anchorCandidate;
++                    //System.out.println(anchor);
++                    buildRelations(anchor.getParent());
++                }
++                
++                
++            } else {
++                Logger.log.warn("unsupported GraphRefContainer: " + grc);
++            }
++        }
++    }
++    
++    
++    void addLeft(PathwayElement pwe) {
++        addElement(pwe, lefts);
++    }
++
++    void addRight(PathwayElement pwe) {
++        addElement(pwe, rights);
++    }
++
++    void addMediator(PathwayElement pwe) {
++        addElement(pwe, mediators);
++    }
++
++    void addElement(PathwayElement pwe, Set<PathwayElement> set) {
++        if(pwe != null) {
++            //If it's a group, add all subelements
++            if(pwe.getObjectType() == ObjectType.GROUP) {
++                for(PathwayElement ge : pwe.getParent().getGroupElements(pwe.getGroupId())) {
++                    addElement(ge, set);
++                }
++            }
++            //System.out.print("*"+pwe.getGraphId()+"*");
++            // Because we want to take the shortest path, ignore subsequent findings of the same nodes.
++            // This should not affect output at all because there is no cycles in reaction graphs (i.e.
++            // all reaction graphs are bidirected acyclic graph).
++            if (!set.contains(pwe)) {
++                set.add(pwe);
++                List<PathwayElement> branchLines = new ArrayList<PathwayElement>();
++                for (PathwayElement p : lineStack) {
++                    if (!backboneLines.contains(p)) {
++                        branchLines.add(p);
++                    }
++                }
++                lines.put(pwe, branchLines);
++                //System.out.println("- put "+pwe.getGraphId());
++            }
++            /*
++            else {
++                System.out.println("- dup "+pwe.getGraphId());
++            }
++            */
++        }
++    }
++
++    public Set<PathwayElement> getLefts() { return lefts; }
++    public Set<PathwayElement> getRights() { return rights; }
++    public Set<PathwayElement> getMediators() { return mediators; }
++    
++    private PathwayElement backboneGroup;
++    private List<PathwayElement> backboneLines = new ArrayList<PathwayElement>();
++    
++    public void setBackboneGroup(PathwayElement backboneGroup) {
++        this.backboneGroup = backboneGroup;
++        Pathway pwy = backboneGroup.getParent();
++        // register all points in the backbone so that it can be filtered off when getting branch points
++        backboneLines = new ArrayList<PathwayElement>();
++        for (PathwayElement pe : pwy.getGroupElements(backboneGroup.getGroupId())) {
++            if (pe.getObjectType() == ObjectType.LINE) {
++                backboneLines.add(pe);
++            }
++            
++        }
++    }
++}
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.14 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.15
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.14	Mon Jul  5 11:39:22 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Mon Aug 16 11:01:58 2010
+@@ -138,8 +138,6 @@
+                 Element dataNode = createNode((Node) r);
+                 if (dataNode != null) {
+                     pathwayElm.addContent(dataNode);
+-                    String gpmlId = dataNode.getAttributeValue(GPMLConstants.GraphId);
+-                    rToGraphId.put(r, gpmlId);
+                     if (r.getReactomeId() != null) {
+                         GKInstance inst = dbAdaptor.fetchInstance(r.getReactomeId());
+                         if (inst != null) {
+@@ -150,6 +148,8 @@
+                             wrapLabels(dataNode, ((Graphics2D)g).getFontRenderContext());
+                         }
+                     }
++                    String gpmlId = dataNode.getAttributeValue(GPMLConstants.GraphId);
++                    rToGraphId.put(r, gpmlId);
+                 }
+             }
+         }
+@@ -175,7 +175,7 @@
+         }
+         // Create groups
+         for (HyperEdge edge : edges) {
+-            String groupId = "group_e_" + edge.getID();
++            String groupId = createGraphId(edge);
+             Element groupElm = createGroup(groupId);
+             // Show display name as text label for group
+             String name = edge.getDisplayName();
+@@ -207,6 +207,14 @@
+         return document;
+     }
+     
++    private String createGraphId(HyperEdge edge) {
++        String id = "group_e_" + edge.getID();
++        if (edge.getReactomeId() != null) {
++            id = id + "_REACTOME_" + edge.getReactomeId();
++        }
++        return id;
++    }
++
+     private Element createGroup(String groupId) {
+         Element groupElm = new Element(GPMLConstants.Group, GPML_NS);
+         // Note: group id format for compartment
+@@ -254,7 +262,7 @@
+         List<Element> lineElms = createLineElmForBackbone(edge,
+                                                          color,
+                                                          pointToElm);
+-        String groupId = "group_e_" + edge.getID();
++        String groupId = createGraphId(edge);
+         for (Element elm : lineElms) {
+             elm.setAttribute(GPMLConstants.GroupRef, groupId);
+         }
+@@ -671,8 +679,8 @@
+                                       GPML_NS);
+         // Convert attributes
+         // Integer cannot be used for xsd:ID. Adding "n" for "Node" to create a valid id
+-        nodeElm.setAttribute(GPMLConstants.GraphId, 
+-                             "n" + node.getID() + "");
++        String id = "n" + node.getID() + "";
++        nodeElm.setAttribute(GPMLConstants.GraphId, id);
+         nodeElm.setAttribute(GPMLConstants.TextLabel,
+                              node.getDisplayName());
+         String type = null;
+@@ -865,6 +873,11 @@
+             else
+                 elm.addContent(children);
+         }
++        //Put DB_ID for future reference when converting back to ATXML
++        String graphId = elm.getAttributeValue(GPMLConstants.GraphId);
++        if (graphId != null) {
++            elm.setAttribute(GPMLConstants.GraphId, graphId + "_REACTOME_" + inst.getDBID());
++        }
+     }
+     
+     private void addToBiopaxElm(Element childElm) {
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/TestPathways.java	2010-09-08 01:09:29.701508836 +0800
+@@ -0,0 +1,239 @@
++package org.gk.gpml;
++
++import java.io.BufferedWriter;
++import java.io.ByteArrayInputStream;
++import java.io.ByteArrayOutputStream;
++import java.io.File;
++import java.io.FileWriter;
++import java.sql.ResultSet;
++import java.util.ArrayList;
++
++import org.gk.model.GKInstance;
++import org.gk.persistence.MySQLAdaptor;
++import org.jdom.Document;
++import org.jdom.input.SAXBuilder;
++import org.jdom.output.Format;
++import org.jdom.output.XMLOutputter;
++
++/**
++ * A script to extract ATXML pathway diagrams in the database to file system, check their validity,
++ * converts them to GPML, and validates the generated GPML.
++ * 
++ * The script behavior (whether to extract or validate, etc.) can be specified at compile time by modifying
++ * the variables at main() (isWriting, isValidating, checkATXML, checkGPML).
++ * 
++ * @author leon
++ *
++ */
++class TestPathways {
++    
++    private static void writeToFile(String s, String fn) {
++        try {
++            BufferedWriter out = new BufferedWriter(new FileWriter(fn));
++        out.write(s);
++        out.close();
++        }
++        catch (Exception e) {
++            e.printStackTrace();
++        }
++    }
++    
++    public static void log(String s) {
++        System.out.println(s);
++    }
++    
++
++    private static SAXBuilder getValidatingBuilder(String xsdUri, String fileLocation) {
++        SAXBuilder builder = new SAXBuilder(true);
++        String attr = xsdUri + " " + fileLocation;
++        builder.setFeature("http://apache.org/xml/features/validation/schema", true);
++        builder.setProperty(
++                "http://apache.org/xml/properties/schema/external-noNamespaceSchemaLocation",
++                attr);
++        builder.setProperty(
++                "http://apache.org/xml/properties/schema/external-schemaLocation",
++                attr);
++        return builder;
++    }
++    
++    private static interface DiagramTester {
++        public String fetchDiagram(GKInstance instance) throws Exception;
++        /*
++         * Injects extraAttributes to the first element of the XML diagram.
++         * Validation only works when the first element of the XML has certain
++         * string so it is hacked into the XML using regular expression.
++         */
++        public String inject(String diagram, String extraAttributes);
++        public void validate(String diagram) throws Exception;
++        public String getFileNameExtension();
++        public String getXSDURI();
++        public boolean isXMLNamespaced();
++    }
++    
++    
++    private class ATXMLDiagramTester implements DiagramTester {
++        private ResultSet rs;
++        private int rsIndex;
++        private SAXBuilder validator;
++        private String xsdUri = "";
++        
++        /*
++         * rs is the SQL ResultSet while index is the row number that contains the diagram.
++         */
++        public ATXMLDiagramTester(ResultSet rs, int index) {
++            this.rs = rs;
++            this.rsIndex = index;
++            
++            File atxmlFile = new File("atxml.xsd");
++            if (!atxmlFile.exists()) {
++                log("Error: ATXML XSD not found.");
++                //System.exit(1);
++            }
++            xsdUri = "file://" + atxmlFile.getAbsolutePath();
++            validator = getValidatingBuilder(xsdUri, xsdUri);
++        }
++        public String fetchDiagram(GKInstance instance) throws Exception {
++            return rs.getString(rsIndex);
++        }
++        public String inject(String diagram, String extraAttributes) {
++            return diagram.replaceFirst("\\<Process ", "<Process "+extraAttributes+" ");
++        }
++        public void validate(String diagram) throws Exception {
++            validator.build(new ByteArrayInputStream(diagram.getBytes("UTF-8")));
++        }
++        public String getFileNameExtension() {
++            return "xml";
++        }
++        public String getXSDURI() {
++            return xsdUri;
++        }
++        public boolean isXMLNamespaced() {
++            return false;
++        }
++    }
++    
++    private class GPMLDiagramTester implements DiagramTester {
++        private SAXBuilder validator;
++        private String xsdUri = "http://genmapp.org/GPML/2010a";
++        private ReactomeToGPMLConverter r2gConverter;
++        private MySQLAdaptor adaptor = null;
++        
++        public GPMLDiagramTester(MySQLAdaptor adaptor) {
++            File atxmlFile = new File("GPML2010a.xsd");
++            if (!atxmlFile.exists()) {
++                log("Error: GPML2010a XSD not found.");
++                //System.exit(1);
++            }
++            String schemaLocation = "file://" + atxmlFile.getAbsolutePath();
++            validator = getValidatingBuilder(xsdUri, schemaLocation);
++            r2gConverter = new ReactomeToGPMLConverter();
++            this.adaptor = adaptor;
++            r2gConverter.setMySQLAdaptor(adaptor);
++        }
++        public String fetchDiagram(GKInstance instance) throws Exception {
++            Document doc = r2gConverter.convertPathway(instance);
++            XMLOutputter outputter = new XMLOutputter(Format.getPrettyFormat());
++            ByteArrayOutputStream oStream = new ByteArrayOutputStream();
++            outputter.output(doc, oStream);
++            return oStream.toString("UTF-8");
++        }
++        public String inject(String diagram, String extraAttributes) {
++            return diagram.replaceFirst(
++                    "\\<Pathway ",
++                    "<Pathway "+extraAttributes+" ");
++        }
++        public void validate(String diagram) throws Exception {
++            validator.build(new ByteArrayInputStream(diagram.getBytes("UTF-8")));
++        }
++        public String getFileNameExtension() {
++            return "gpml";
++        }
++        public String getXSDURI() {
++            return xsdUri;
++        }
++        public boolean isXMLNamespaced() {
++            return true;
++        }
++    }
++    
++    private static void printUsage() {
++        System.out.println("Usage: java org.gk.gpml.TestPathways dbhost dbName user pwd port");
++    }
++    
++    public static void main(String[] args) {
++        TestPathways testPathways = new TestPathways();
++        boolean isWriting = true; // write the XML files?
++        boolean isValidating = true; // validate the XML files?
++        boolean checkATXML = true; // validate ATXML?
++        boolean checkGPML = true; // validate checkGPML?
++        
++        final String DIAGRAM_DIRECTORY = "diagrams/";
++        if (args.length != 5) {
++            printUsage();
++            System.exit(1);
++        }
++        
++        new File(DIAGRAM_DIRECTORY).mkdir();
++        try {
++            
++            MySQLAdaptor adaptor = new MySQLAdaptor(args[0],
++                    args[1],
++                    args[2], 
++                    args[3],
++                    Integer.parseInt(args[4]));
++            
++            
++            ResultSet rs = adaptor.executeQuery("SELECT p.DB_ID, CONVERT(pd.storedATXML using utf8)" +
++                    " FROM PathwayDiagram pd INNER JOIN Pathway p" +
++                    " ON pd.representedPathway = p.DB_ID", null);
++            
++            ArrayList<DiagramTester> testers = new ArrayList<DiagramTester>();
++            if (checkATXML) {
++                testers.add(testPathways.new ATXMLDiagramTester(rs, 2));
++            }
++            if (checkGPML) {
++                testers.add(testPathways.new GPMLDiagramTester(adaptor));
++            }
++            
++            while (rs.next()) {
++                Long dbID = rs.getLong(1);
++                GKInstance instance = adaptor.fetchInstance(dbID);
++                String diagramName = dbID + " "  + instance.getDisplayName();
++                for (DiagramTester tester : testers) {
++                    try {
++                        //TODO: OS-agnostic directories & auto-create
++                        String diagramFileName =
++                            DIAGRAM_DIRECTORY
++                            + diagramName.replaceAll("[^0-9A-Za-z()_-]+", " ")
++                            + "."
++                            + tester.getFileNameExtension();
++                        String diagram = tester.fetchDiagram(instance);
++                        if (isWriting) {
++                            writeToFile(diagram, diagramFileName);
++                        }
++                        if (isValidating) {
++                            log("Validating " + tester.getFileNameExtension()
++                                    + " " + diagramName + " (" + diagram.length() + " bytes)... ");
++                            String extraAttributes = "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
++                            + "xsi:"
++                            + (tester.isXMLNamespaced() ? "schemaLocation" : "noNamespaceSchemaLocation")
++                            + "=\""+tester.getXSDURI()+"\"";
++                            String injectedDiagram = tester.inject(diagram, extraAttributes);
++                            //writeToFile(injectedDiagram, diagramFileName);
++                            tester.validate(injectedDiagram);
++                        }
++                    }
++                    catch (Exception e) {
++                        e.printStackTrace();
++                        continue;
++                    }
++                }
++            }
++        }
++        catch (Exception e) {
++            e.printStackTrace();
++        }
++    }
++}
++
++
+--- /dev/null	2010-08-29 18:07:37.673436088 +0800
++++ GKB/java/authorTool/src/org/gk/gpml/atxml.xsd	2010-09-08 01:09:36.278360852 +0800
+@@ -0,0 +1,363 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
++  <xs:element name="Process">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Properties"/>
++        <xs:element ref="Nodes"/>
++        <xs:element ref="Edges"/>
++        <xs:element ref="Pathways"/>
++      </xs:sequence>
++      <xs:attribute name="nextId" use="required" type="xs:integer"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Nodes">
++    <xs:complexType>
++      <xs:choice minOccurs="0" maxOccurs="unbounded">
++        <xs:element ref="org.gk.render.Note"/>
++        <xs:element ref="org.gk.render.ProcessNode"/>
++        <xs:element ref="org.gk.render.RenderableChemical"/>
++        <xs:element ref="org.gk.render.RenderableCompartment"/>
++        <xs:element ref="org.gk.render.RenderableComplex"/>
++        <xs:element ref="org.gk.render.RenderableEntity"/>
++        <xs:element ref="org.gk.render.RenderablePathway"/>
++        <xs:element ref="org.gk.render.RenderableProtein"/>
++        <xs:element ref="org.gk.render.RenderableRNA"/>
++      </xs:choice>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.Note">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element ref="Properties"/>
++      </xs:sequence>
++      <xs:attribute name="bounds" use="required"/>
++      <xs:attribute name="fgColor"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="textPosition"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.ProcessNode">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Properties"/>
++      </xs:sequence>
++      <xs:attribute name="bgColor"/>
++      <xs:attribute name="bounds"/>
++      <xs:attribute name="fgColor"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="lineColor"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++      <xs:attribute name="textPosition"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableChemical">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Properties"/>
++        <xs:element minOccurs="0" ref="Shortcuts"/>
++      </xs:sequence>
++      <xs:attribute name="bgColor"/>
++      <xs:attribute name="bounds"/>
++      <xs:attribute name="fgColor"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="lineColor"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++      <xs:attribute name="textPosition"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableCompartment">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Properties"/>
++        <xs:element minOccurs="0" ref="Components"/>
++      </xs:sequence>
++      <xs:attribute name="bgColor" use="required"/>
++      <xs:attribute name="bounds" use="required"/>
++      <xs:attribute name="fgColor"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="lineColor"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++      <xs:attribute name="textPosition" use="required"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Components">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Component"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableComplex">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Properties"/>
++        <xs:choice minOccurs="0">
++          <xs:element ref="Shortcuts"/>
++          <xs:element ref="OldBounds"/>
++        </xs:choice>
++      </xs:sequence>
++      <xs:attribute name="bgColor" use="required"/>
++      <xs:attribute name="bounds"/>
++      <xs:attribute name="fgColor"/>
++      <xs:attribute name="hideComponents" type="xs:boolean"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="lineColor"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++      <xs:attribute name="textPosition"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="OldBounds">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Bounds"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Bounds">
++    <xs:complexType>
++      <xs:attribute name="bounds" use="required"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableEntity">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Properties"/>
++        <xs:element minOccurs="0" ref="Shortcuts"/>
++      </xs:sequence>
++      <xs:attribute name="bounds"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++      <xs:attribute name="textPosition"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderablePathway">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element ref="Properties"/>
++      </xs:sequence>
++      <xs:attribute name="bounds" use="required"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableProtein">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Properties"/>
++        <xs:choice minOccurs="0">
++          <xs:element ref="Shortcuts"/>
++          <xs:element ref="NodeAttachments"/>
++        </xs:choice>
++      </xs:sequence>
++      <xs:attribute name="bounds"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++      <xs:attribute name="textPosition"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="NodeAttachments">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="org.gk.render.RenderableFeature"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableFeature">
++    <xs:complexType>
++      <xs:attribute name="description" type="xs:NCName"/>
++      <xs:attribute name="label" type="xs:NCName"/>
++      <xs:attribute name="reactomeId" type="xs:integer"/>
++      <xs:attribute name="relativeX" use="required" type="xs:decimal"/>
++      <xs:attribute name="relativeY" use="required" type="xs:decimal"/>
++      <xs:attribute name="trackId" use="required" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableRNA">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Properties"/>
++      </xs:sequence>
++      <xs:attribute name="bounds"/>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++      <xs:attribute name="textPosition"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Edges">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:choice minOccurs="0" maxOccurs="unbounded">
++          <xs:element ref="org.gk.render.RenderableInteraction"/>
++          <xs:element ref="org.gk.render.RenderableReaction"/>
++        </xs:choice>
++        <xs:element minOccurs="0" maxOccurs="unbounded" ref="org.gk.render.FlowLine"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableInteraction">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element ref="Inputs"/>
++        <xs:element ref="Outputs"/>
++      </xs:sequence>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="interactionType" use="required" type="xs:NCName"/>
++      <xs:attribute name="lineColor"/>
++      <xs:attribute name="lineWidth" use="required" type="xs:decimal"/>
++      <xs:attribute name="points" use="required"/>
++      <xs:attribute name="position" use="required"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.RenderableReaction">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="Inputs"/>
++        <xs:element minOccurs="0" ref="Outputs"/>
++        <xs:element minOccurs="0" ref="Catalysts"/>
++        <xs:element minOccurs="0" ref="Inhibitors"/>
++        <xs:element minOccurs="0" ref="Activators"/>
++        <xs:element minOccurs="0" ref="Properties"/>
++      </xs:sequence>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="lineColor"/>
++      <xs:attribute name="lineWidth" use="required" type="xs:decimal"/>
++      <xs:attribute name="points" use="required"/>
++      <xs:attribute name="position" use="required"/>
++      <xs:attribute name="reactionType"/>
++      <xs:attribute name="reactomeId" use="required" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Catalysts">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Catalyst"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Catalyst">
++    <xs:complexType>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="points" use="required"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Inhibitors">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Inhibitor"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Inhibitor">
++    <xs:complexType>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="points" use="required"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Activators">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Activator"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Activator">
++    <xs:complexType>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="points" use="required"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="org.gk.render.FlowLine">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element ref="Inputs"/>
++        <xs:element ref="Outputs"/>
++      </xs:sequence>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="lineWidth" use="required" type="xs:decimal"/>
++      <xs:attribute name="points" use="required"/>
++      <xs:attribute name="position" use="required"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Pathways">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" maxOccurs="unbounded" ref="Pathway"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Pathway">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Component"/>
++      </xs:sequence>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Properties">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element minOccurs="0" ref="isChanged"/>
++        <xs:element ref="displayName"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="isChanged" type="xs:boolean"/>
++  <xs:element name="displayName" type="xs:string"/>
++  <xs:element name="Shortcuts">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Shortcut"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Shortcut">
++    <xs:complexType>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Component">
++    <xs:complexType>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Inputs">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Input"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Input">
++    <xs:complexType>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="points"/>
++      <xs:attribute name="stoichiometry" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Outputs">
++    <xs:complexType>
++      <xs:sequence>
++        <xs:element maxOccurs="unbounded" ref="Output"/>
++      </xs:sequence>
++    </xs:complexType>
++  </xs:element>
++  <xs:element name="Output">
++    <xs:complexType>
++      <xs:attribute name="id" use="required" type="xs:integer"/>
++      <xs:attribute name="points"/>
++      <xs:attribute name="stoichiometry" type="xs:integer"/>
++    </xs:complexType>
++  </xs:element>
++</xs:schema>

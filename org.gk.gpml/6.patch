@@ -1,0 +1,106 @@
+---------------------
+PatchSet 6 
+Date: 2010/06/07 00:08:08
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+Fixed some exceptions and typos.
+
+Members: 
+	ReactomeToGPMLConverter.java:1.4->1.5 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.4 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.5
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.4	Mon Nov  2 13:18:55 2009
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Sun Jun  6 12:08:08 2010
+@@ -28,6 +28,7 @@
+ import org.gk.persistence.MySQLAdaptor;
+ import org.gk.render.HyperEdge;
+ import org.gk.render.Node;
++import org.gk.render.Note;
+ import org.gk.render.Renderable;
+ import org.gk.render.RenderableChemical;
+ import org.gk.render.RenderableCompartment;
+@@ -126,9 +127,11 @@
+                     rToGraphId.put(r, gpmlId);
+                     if (r.getReactomeId() != null) {
+                         GKInstance inst = dbAdaptor.fetchInstance(r.getReactomeId());
+-                        addSemanticContent(dataNode, 
+-                                           inst,
+-                                           true);
++                        if (inst != null) {
++                            addSemanticContent(dataNode, 
++                                               inst,
++                                               true);
++                        }
+                     }
+                 }
+             }
+@@ -222,13 +225,13 @@
+     private void handleEdge(HyperEdge edge,
+                             Element pathwayElm,
+                             Map<Renderable, String> rToGraphId) {
+-        // Do a validation to make all coodinates correct
++        // Do a validation to make all coordinates correct
+         //edge.validateConnectInfo();
+         // Color to be used by all lines converted from this edge
+         Color color = edge.getForegroundColor();
+         if (color == null)
+             color = Color.black;
+-        // These point elmenet will be used to connect to nodes
++        // These point element will be used to connect to nodes
+         Map<Point, Element> pointToElm = new HashMap<Point, Element>();
+         // Handle the backbone
+         List<Element> lineElms = createLineElmForBackbone(edge,
+@@ -656,14 +659,18 @@
+             type = GPMLConstants.Metabolite;
+         else if (node instanceof RenderableComplex)
+             type = GPMLConstants.Complex;
++        else if (node instanceof Note)
++          type = GPMLConstants.Label;
+         else
+             type = GPMLConstants.Unknown;
+         nodeElm.setAttribute(GPMLConstants.Type,
+                              type);
+         addGraphicsElm(node, nodeElm);
+         // Xref is required
+-        Element xrefElm = createXrefForNode(node);
+-        nodeElm.addContent(xrefElm);
++        if (type != GPMLConstants.Label) {
++            Element xrefElm = createXrefForNode(node);
++            nodeElm.addContent(xrefElm);
++        }
+         return nodeElm;
+     }
+ 
+@@ -699,18 +706,24 @@
+         // Try to get ReferenceEntity
+         GKInstance instance = node.getInstance();
+         if (instance == null) {
+-            instance = dbAdaptor.fetchInstance(node.getReactomeId());
+-            node.setInstance(instance);
++        	Long id = node.getReactomeId();
++        	if (id != null) {
++                instance = dbAdaptor.fetchInstance(id);
++                node.setInstance(instance);
++        	}
+         }
+         GKInstance referenceEntity = null;
+-        if (instance.getSchemClass().isValidAttribute(ReactomeJavaConstants.referenceEntity)) 
++        if (instance != null && instance.getSchemClass().isValidAttribute(ReactomeJavaConstants.referenceEntity)) 
+             referenceEntity = (GKInstance) instance.getAttributeValue(ReactomeJavaConstants.referenceEntity);
+         if (referenceEntity == null) {
+             // Use Reactome as default if no reference entity can be found
+             xrefElm.setAttribute(GPMLConstants.Database,
+                                  "Reactome");
+-            xrefElm.setAttribute(GPMLConstants.ID,
+-                                 getReactomeId(instance));
++            String id = instance == null ? node.getReactomeId().toString() : getReactomeId(instance);
++            if (id == null) {
++            	id = instance.getDBID().toString();
++            }
++            xrefElm.setAttribute(GPMLConstants.ID, id);
+         }
+         else {
+             GKInstance db = (GKInstance) referenceEntity.getAttributeValue(ReactomeJavaConstants.referenceDatabase);

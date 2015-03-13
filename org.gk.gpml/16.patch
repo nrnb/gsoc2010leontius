@@ -1,0 +1,26 @@
+---------------------
+PatchSet 16 
+Date: 2010/07/12 22:31:31
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+More constants.
+
+Members: 
+	GPMLConstants.java:1.2->1.3 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java:1.2 GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java:1.3
+--- GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java:1.2	Mon Jun 21 11:50:21 2010
++++ GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java	Mon Jul 12 10:31:31 2010
+@@ -149,7 +149,8 @@
+     public static final String Solid = "Solid";
+     public static final String Valign = "Valign"; // "Top" "Middle", "Bottom"
+     public static final String LineStyle = "LineStyle"; // "Solid" or "Broken"
+-    public static final String ShapreType = "ShapeType";
++    public static final String LineThickness = "LineThickness";
++    public static final String Oval = "Oval";
+     
+     public static final String BIOPAX_NS = "http://www.biopax.org/release/biopax-level3.owl#";
+ }

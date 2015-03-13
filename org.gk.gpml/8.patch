@@ -1,0 +1,27 @@
+---------------------
+PatchSet 8 
+Date: 2010/06/07 22:54:39
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+Fixed errors on converting empty diagrams.
+
+Members: 
+	ReactomeToGPMLConverter.java:1.6->1.7 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.6 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.7
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.6	Mon Jun  7 10:38:50 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Mon Jun  7 10:54:39 2010
+@@ -111,6 +111,10 @@
+         // Do converting for this pathway
+         // Convert entities first
+         List<Renderable> objects = diagram.getComponents();
++        if (objects == null) {
++            // avoid errors on empty diagrams
++            objects = new ArrayList<Renderable>();
++        }
+         List<HyperEdge> edges = new ArrayList<HyperEdge>();
+         List<RenderableCompartment> compartments = new ArrayList<RenderableCompartment>();
+         Map<Renderable, String> rToGraphId = new HashMap<Renderable, String>();

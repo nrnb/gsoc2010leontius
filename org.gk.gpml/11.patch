@@ -1,0 +1,75 @@
+---------------------
+PatchSet 11 
+Date: 2010/06/28 21:21:42
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+Better appearance for converted GPML pathways.
+
+Members: 
+	ReactomeToGPMLConverter.java:1.9->1.10 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.9 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.10
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.9	Mon Jun 21 11:49:55 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Mon Jun 28 09:21:42 2010
+@@ -29,6 +29,7 @@
+ import org.gk.render.HyperEdge;
+ import org.gk.render.Node;
+ import org.gk.render.Note;
++import org.gk.render.DefaultRenderConstants;
+ import org.gk.render.ReactionType;
+ import org.gk.render.Renderable;
+ import org.gk.render.RenderableChemical;
+@@ -140,6 +141,7 @@
+                             addSemanticContent(dataNode, 
+                                                inst,
+                                                true);
++                            addCosmetics(dataNode, inst);
+                         }
+                     }
+                 }
+@@ -329,9 +331,8 @@
+                             catalyst);
+         }
+     }
+-    //TODO: add more validation to ensure that the child is really <Graphics>
+     private Element getGraphicsChild(Element elm) {
+-        Element graphics = (Element) elm.getChildren().get(0);
++        Element graphics = (Element) elm.getChild("Graphics", GPML_NS);
+         return graphics;
+     }
+     private void handleCatalysts(HyperEdge edge,
+@@ -683,7 +684,7 @@
+         nodeElm.setAttribute(GPMLConstants.Type,
+                              type);
+         addGraphicsElm(node, nodeElm);
+-        // Xref is required
++        // Xref is required except for labels
+         if (type != GPMLConstants.Label) {
+             Element xrefElm = createXrefForNode(node);
+             nodeElm.addContent(xrefElm);
+@@ -973,6 +974,22 @@
+         return builder.toString();
+     }
+     
++    String getHexString(Color c) {
++        return Integer.toHexString(c.getRGB() & 0x00ffffff);
++    }
++    
++    private void addCosmetics(Element dataNode, GKInstance inst) {
++        String type = dataNode.getAttributeValue("Type");
++        Element graphics = getGraphicsChild(dataNode);
++        System.out.println("::"+type+"::"+dataNode.getAttributeValue("TextLabel"));
++        graphics.setAttribute(GPMLConstants.FillColor, getHexString(DefaultRenderConstants.DEFAULT_BACKGROUND));
++        if (type.equals("Complex")) {
++            graphics.setAttribute(GPMLConstants.ShapeType, GPMLConstants.RoundedRectangle);
++            graphics.setAttribute(GPMLConstants.FillColor, getHexString(new Color(204, 255, 255)));
++            graphics.setAttribute(GPMLConstants.LineThickness, "2");
++        }
++    }
++    
+     @Test
+     public void testConvert() throws Exception {
+         MySQLAdaptor dba = new MySQLAdaptor("localhost",

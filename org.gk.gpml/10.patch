@@ -1,0 +1,207 @@
+---------------------
+PatchSet 10 
+Date: 2010/06/21 23:49:55
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+Upgrade conversion code from GPML2008a output to GPML2010a output
+
+Members: 
+	GPMLConstants.java:1.1->1.2 
+	ReactomeToGPMLConverter.java:1.8->1.9 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java:1.1 GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java:1.2
+--- GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java:1.1	Fri Oct 23 19:12:50 2009
++++ GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java	Mon Jun 21 11:50:21 2010
+@@ -1,7 +1,7 @@
+ package org.gk.gpml;
+ 
+ public class GPMLConstants {
+-    public static final String GPML_NS = "http://genmapp.org/GPML/2008a";
++    public static final String GPML_NS = "http://genmapp.org/GPML/2010a";
+     public static final String Key = "Key";
+     public static final String Comment = "Comment";
+     public static final String Style = "Style";
+@@ -33,10 +33,12 @@
+     public static final String Copyright = "Copyright";
+     public static final String Black = "Black";
+     public static final String Annotation = "Annotation";
+-    public static final String y = "y";
++    public static final String Y = "Y";
++    public static final String y = Y; //@deprecated
+     public static final String GeneProduct = "GeneProduct";
+     public static final String ZOrder = "ZOrder";
+-    public static final String x = "x";
++    public static final String X = "X";
++    public static final String x = X; //@deprecated
+     public static final String Organism = "Organism";
+     public static final String BiopaxRef = "BiopaxRef";
+     public static final String Type = "Type";
+@@ -44,10 +46,12 @@
+     public static final String Right = "Right";
+     public static final String BoardWidth = "BoardWidth";
+     public static final String FontWeight = "FontWeight";
+-    public static final String position = "position";
++    public static final String Position = "Position";
++    public static final String position = Position;
+     public static final String None = "None";
+     public static final String PublicationXref = "PublicationXref";
+-    public static final String relX = "relX";
++    public static final String RelX = "RelX";
++    public static final String relX = RelX; //@deprecated
+     public static final String Author = "Author";
+     public static final String Label = "Label";
+     public static final String CenterY = "CenterY";
+@@ -71,7 +75,8 @@
+     public static final String Bold = "Bold";
+     public static final String Last_Modified = "Last-Modified";
+     public static final String Gray = "Gray";
+-    public static final String relY = "relY";
++    public static final String RelY = "RelY";
++    public static final String relY = RelY; //@deprecated
+     public static final String GraphRef = "GraphRef";
+     public static final String RotationType = "RotationType";
+     public static final String FontAttributes = "FontAttributes";
+@@ -142,5 +147,10 @@
+     public static final String StyleType = "StyleType";
+     public static final String Strikethru = "Strikethru";
+     public static final String Solid = "Solid";
++    public static final String Valign = "Valign"; // "Top" "Middle", "Bottom"
++    public static final String LineStyle = "LineStyle"; // "Solid" or "Broken"
++    public static final String ShapreType = "ShapeType";
++    
++    public static final String BIOPAX_NS = "http://www.biopax.org/release/biopax-level3.owl#";
+ }
+ 
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.8 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.9
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.8	Mon Jun  7 11:17:35 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Mon Jun 21 11:49:55 2010
+@@ -59,9 +59,12 @@
+     private final Namespace GPML_NS = Namespace.getNamespace(GPMLConstants.GPML_NS);
+     private final Namespace RDF_NS = Namespace.getNamespace("rdf", 
+                                                             BioPAXJavaConstants.RDF_NS);
++    // GPML2010a requires BioPAX level 3. Instead of upgrading the whole BioPAX
++    // converter we just specify the level 3 namespace here. BioPAX level 3 is a 
++    // superset of BioPAX level 2.
+     private final Namespace BP_NS = Namespace.getNamespace("bp",
+-                                                           BioPAXJavaConstants.BIOPAX_NS);
+-    private final int COORDINATE_SCALE_TO_GPML = 15; // Very strange. Not sure why!
++                                                           GPMLConstants.BIOPAX_NS);
++    private final int COORDINATE_SCALE_TO_GPML = 1; // Very strange. Not sure why!
+     // The root element for pathway
+     private Element pathwayElm;
+     private Element biopaxElm;
+@@ -301,8 +304,10 @@
+                                                                pointToElm);
+                 // Want to use dashed line for catalysts
+                 for (Element elm : lineElms) {
+-                    elm.setAttribute(GPMLConstants.Style,
++                    Element graphics = getGraphicsChild(elm);
++                    graphics.setAttribute(GPMLConstants.LineStyle,
+                                      style);
++                    
+                 }
+                 index ++;
+                 pathwayElm.addContent(lineElms);
+@@ -324,7 +329,11 @@
+                             catalyst);
+         }
+     }
+-    
++    //TODO: add more validation to ensure that the child is really <Graphics>
++    private Element getGraphicsChild(Element elm) {
++        Element graphics = (Element) elm.getChildren().get(0);
++        return graphics;
++    }
+     private void handleCatalysts(HyperEdge edge,
+                                  Color color,
+                                  Map<Point, Element> pointToElm,
+@@ -479,7 +488,7 @@
+         Element pointElm = pointToElm.get(point);
+         pointElm.setAttribute(GPMLConstants.GraphRef,
+                               rToGraphId.get(node));
+-        // Specifiy the relative X, y to avoid the default: 0, 0
++        // Specify the relative X, y to avoid the default: 0, 0
+         double[] relativeXY = generateRelCoordinate(point, node);
+         pointElm.setAttribute(GPMLConstants.relX, relativeXY[0] + "");
+         pointElm.setAttribute(GPMLConstants.relY, relativeXY[1] + "");
+@@ -507,7 +516,7 @@
+                                                    Map<Point, Element> pointToElm) {
+         List<Element> lineElms = new ArrayList<Element>();
+         String graphId = "e_" + edge.getID();
+-        createLineElments(graphId, 
++        createLineElements(graphId, 
+                           color,
+                           lineElms, 
+                           edge.getBackbonePoints(),
+@@ -555,7 +564,7 @@
+         // The lines will be converted by line element one by one 
+         List<Point> pointsCopy = new ArrayList<Point>(points);
+         pointsCopy.add(anchor);
+-        createLineElments(graphId, 
++        createLineElements(graphId, 
+                           color, 
+                           rtn, 
+                           pointsCopy,
+@@ -568,7 +577,7 @@
+         return rtn;
+     }
+ 
+-    private void createLineElments(String graphId, 
++    private void createLineElements(String graphId, 
+                                    Color color,
+                                    List<Element> rtn, 
+                                    List<Point> points,
+@@ -580,12 +589,12 @@
+             Point second = points.get(i + 1);
+             // Create a line element between these two points
+             Element lineElm = new Element(GPMLConstants.Line, GPML_NS);
+-            lineElm.setAttribute(GPMLConstants.Style,
+-                                 GPMLConstants.Solid);
+             lineElm.setAttribute(GPMLConstants.GraphId, 
+                                  graphId + "_" + i);  
+             Element graphicElm = new Element(GPMLConstants.Graphics, GPML_NS);
+             lineElm.addContent(graphicElm);
++            graphicElm.setAttribute(GPMLConstants.LineStyle,
++                    GPMLConstants.Solid);
+             graphicElm.setAttribute(GPMLConstants.Color, 
+                                     GKApplicationUtilities.getHexForColor(color));
+             Element firstElm = convertPointToElement(first,
+@@ -618,7 +627,7 @@
+         // Linked to this element for the firstElm
+         // Add a anchor point first in the preSecondElm
+         Element anchorElm = new Element(GPMLConstants.Anchor, GPML_NS);
+-        anchorElm.setAttribute(GPMLConstants.position, pos + "");
++        anchorElm.setAttribute(GPMLConstants.Position, pos + "");
+         anchorElm.setAttribute(GPMLConstants.GraphId, 
+                                id);
+         // Anchor should be attached to Graphics elements
+@@ -637,13 +646,15 @@
+     
+     private Element convertCompartment(RenderableCompartment compartment) {
+         Element shape = new Element(GPMLConstants.Shape, GPML_NS);
+-        shape.setAttribute(GPMLConstants.Type, 
+-                           GPMLConstants.Rectangle);
++        
+         shape.setAttribute(GPMLConstants.GraphId, 
+                            "comp_" + compartment.getID());
+         shape.setAttribute(GPMLConstants.GroupRef,
+                            "group_comp_" + compartment.getID());
+         addGraphicsElm(compartment, shape);
++        Element graphics = getGraphicsChild(shape);
++        graphics.setAttribute(GPMLConstants.ShapeType, 
++                GPMLConstants.Rectangle);
+         return shape;
+     }
+     
+@@ -705,6 +716,7 @@
+                                 COORDINATE_SCALE_TO_GPML * bounds.getWidth() + "");
+         graphicElm.setAttribute(GPMLConstants.Height, 
+                                 COORDINATE_SCALE_TO_GPML * bounds.getHeight() + "");
++        graphicElm.setAttribute(GPMLConstants.Valign, "Middle");
+     }
+     
+     private Element createXrefForNode(Node node) throws Exception {

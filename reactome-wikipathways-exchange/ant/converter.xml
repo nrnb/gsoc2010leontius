@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="ReactomeGPMLConverter" default="run" basedir="..">
+    <description>
+    	The command line interface for conversion of Reactome XML to GPML and vice versa.
+    </description>
+	
+	<property name="mainClass" value="org.gk.gpml.CLIConverter"/>
+
+	
+	<import file="common.xml" />
+	
+	<target name="build" depends="mkdir">
+		<mkdir dir="${tempDir}/classes" />
+		<javac srcdir="${srcDir}" destdir="${tempDir}/classes" debug="true" classpathref="classpath" />
+		<jar destfile="${buildDir}/Converter.jar" basedir="${tempDir}/classes">
+			<manifest>
+				<attribute name="Main-Class" value="${mainClass}" />
+			</manifest>
+		</jar>
+	</target>
+	
+	<target name="run" depends="build, runOnly">
+	</target>
+	
+	<target name="runOnly">
+		<java classname="${mainClass}">
+			<classpath>
+				<path location="${buildDir}/Converter.jar" />
+				<path refid="classpath" />
+			</classpath>
+		</java>
+	</target>
+	
+</project>

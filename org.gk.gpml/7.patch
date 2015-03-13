@@ -1,0 +1,53 @@
+---------------------
+PatchSet 7 
+Date: 2010/06/07 22:38:50
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+Fixed conversion for reactions containing "OMITTED_PROCESS" ReactionType.
+
+Members: 
+	ReactomeToGPMLConverter.java:1.5->1.6 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.5 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.6
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.5	Sun Jun  6 12:08:08 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Mon Jun  7 10:38:50 2010
+@@ -29,6 +29,7 @@
+ import org.gk.render.HyperEdge;
+ import org.gk.render.Node;
+ import org.gk.render.Note;
++import org.gk.render.ReactionType;
+ import org.gk.render.Renderable;
+ import org.gk.render.RenderableChemical;
+ import org.gk.render.RenderableCompartment;
+@@ -36,6 +37,7 @@
+ import org.gk.render.RenderablePathway;
+ import org.gk.render.RenderableProtein;
+ import org.gk.render.RenderableRNA;
++import org.gk.render.RenderableReaction;
+ import org.gk.util.GKApplicationUtilities;
+ import org.jdom.Document;
+ import org.jdom.Element;
+@@ -518,10 +520,16 @@
+         }
+         // anchor for position
+         if (lineElms.size() > 1) {
+-            // Need to find the anchor for the position
+-            Point pos = edge.getPosition();
+-            int index = edge.getBackbonePoints().indexOf(pos);
+-            Element lineElm = lineElms.get(index - 1);
++            int index = 0;
++            RenderableReaction r = (RenderableReaction) edge;
++            // An Omitted Process has an anchor at the beginning of the edge declaration, so in that case
++            // we can just use index == 0
++            if (r == null || r.getReactionType() == null || r.getReactionType() != ReactionType.OMITTED_PROCESS) {
++                // Need to find the anchor for the position
++                Point pos = edge.getPosition();
++                index = edge.getBackbonePoints().indexOf(pos) - 1;
++            }
++            Element lineElm = lineElms.get(index);
+             // Just another anchor
+             String id = "e_" + edge.getID() + "_a_p";
+             addAnchorToLineElm(lineElm, 1.0d, id);

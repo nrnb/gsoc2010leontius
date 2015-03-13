@@ -1,0 +1,24 @@
+---------------------
+PatchSet 15 
+Date: 2010/07/05 23:39:22
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+Line thickness for compartments
+
+Members: 
+	ReactomeToGPMLConverter.java:1.13->1.14 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.13 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.14
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.13	Thu Jul  1 12:24:36 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Mon Jul  5 11:39:22 2010
+@@ -662,6 +662,7 @@
+         Element graphics = getGraphicsChild(shape);
+         graphics.setAttribute(GPMLConstants.ShapeType, 
+                 GPMLConstants.Rectangle);
++        graphics.setAttribute(GPMLConstants.LineThickness, "2.0");
+         return shape;
+     }
+     

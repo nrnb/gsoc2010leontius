@@ -1,0 +1,628 @@
+### Eclipse Workspace Patch 1.0
+#P authorTool
+## This patch contains a port of ReactomeToGPMLConverter that produces Segmented connectors (implemented in Pathvisio by FreeConnectorShape) instead of current multiple Straight segments. The code has been rolled back due to time constraint and to avoid introducing bugs.
+Index: src/org/gk/gpml/GPMLConstants.java
+===================================================================
+RCS file: /usr/local/cvs_repository/GKB/java/authorTool/src/org/gk/gpml/GPMLConstants.java,v
+retrieving revision 1.3
+diff -u -r1.3 GPMLConstants.java
+--- src/org/gk/gpml/GPMLConstants.java	12 Jul 2010 14:31:31 -0000	1.3
++++ src/org/gk/gpml/GPMLConstants.java	30 Jul 2010 16:23:56 -0000
+@@ -151,6 +151,7 @@
+     public static final String LineStyle = "LineStyle"; // "Solid" or "Broken"
+     public static final String LineThickness = "LineThickness";
+     public static final String Oval = "Oval";
++    public static final String Segmented = "Segmented";
+     
+     public static final String BIOPAX_NS = "http://www.biopax.org/release/biopax-level3.owl#";
+ }
+Index: src/org/gk/gpml/ReactomeToGPMLConverter.java
+===================================================================
+RCS file: /usr/local/cvs_repository/GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java,v
+retrieving revision 1.14
+diff -u -r1.14 ReactomeToGPMLConverter.java
+--- src/org/gk/gpml/ReactomeToGPMLConverter.java	5 Jul 2010 15:39:22 -0000	1.14
++++ src/org/gk/gpml/ReactomeToGPMLConverter.java	30 Jul 2010 16:24:03 -0000
+@@ -14,6 +14,7 @@
+ import java.awt.font.FontRenderContext;
+ import java.awt.font.LineBreakMeasurer;
+ import java.awt.font.TextLayout;
++import java.awt.geom.Point2D;
+ import java.awt.image.BufferedImage;
+ import java.io.File;
+ import java.io.FileOutputStream;
+@@ -51,6 +52,7 @@
+ import org.jdom.output.Format;
+ import org.jdom.output.XMLOutputter;
+ import org.junit.Test;
++import org.pathvisio.view.LinAlg;
+ 
+ /**
+  * This class is used to convert a reactome pathway diagram to GPML. To make this conversion, it is required 
+@@ -221,7 +223,7 @@
+     private Element createLabelForCompartment(RenderableCompartment compt) {
+         Element label = new Element(GPMLConstants.Label, GPML_NS);
+         label.setAttribute(GPMLConstants.GraphId, "comp_text_" + compt.getID());
+-        label.setAttribute(GPMLConstants.GroupRef, "group_comp_" + compt.getID());
++        //label.setAttribute(GPMLConstants.GroupRef, "group_comp_" + compt.getID());
+         label.setAttribute(GPMLConstants.TextLabel, compt.getDisplayName());
+         // Create graphics for this compartment
+         Rectangle textRect = compt.getTextBounds();
+@@ -251,14 +253,13 @@
+         // These point element will be used to connect to nodes
+         Map<Point, Element> pointToElm = new HashMap<Point, Element>();
+         // Handle the backbone
+-        List<Element> lineElms = createLineElmForBackbone(edge,
++        Element lineElm = createLineElmForBackbone(edge,
+                                                          color,
+                                                          pointToElm);
+         String groupId = "group_e_" + edge.getID();
+-        for (Element elm : lineElms) {
+-            elm.setAttribute(GPMLConstants.GroupRef, groupId);
+-        }
+-        pathwayElm.addContent(lineElms);
++        //TODO
++        //lineElm.setAttribute(GPMLConstants.GroupRef, groupId);
++        pathwayElm.addContent(lineElm);
+         handleInputs(edge, 
+                      color, 
+                      pointToElm,
+@@ -299,11 +300,11 @@
+         if (helperNodes == null || helperNodes.size() == 0)
+             return;
+         if (branches != null && branches.size() > 0) {
+-            String anchorId = "e_" + edge.getID() + "_a_p"; // p is for position
+             Point anchor = edge.getPosition();
+             int index = 0;
+             for (List<Point> points : branches) {
+-                List<Element> lineElms = createLineElmForBranch(points,
++                String anchorId = getAnchorId(edge, anchor); //TODO
++                Element lineElm = createLineElmForBranch(points,
+                                                                anchor,
+                                                                anchorId,
+                                                                false, 
+@@ -311,14 +312,11 @@
+                                                                color,
+                                                                pointToElm);
+                 // Want to use dashed line for catalysts
+-                for (Element elm : lineElms) {
+-                    Element graphics = getGraphicsChild(elm);
+-                    graphics.setAttribute(GPMLConstants.LineStyle,
+-                                     style);
+-                    
+-                }
++                Element graphics = getGraphicsChild(lineElm);
++                graphics.setAttribute(GPMLConstants.LineStyle,
++                                 style);
+                 index ++;
+-                pathwayElm.addContent(lineElms);
++                pathwayElm.addContent(lineElm);
+             }
+             // Get the last point for arrow head
+             Element anchorElm = pointToElm.get(anchor);
+@@ -415,7 +413,7 @@
+             Point anchor = backbone.get(0);
+             int index = 0;
+             for (List<Point> points : inputBranches) {
+-                List<Element> lineElms = createLineElmForBranch(points,
++                Element lineElm = createLineElmForBranch(points,
+                                                                 anchor,
+                                                                 anchorId,
+                                                                 false, 
+@@ -423,7 +421,7 @@
+                                                                 color,
+                                                                 pointToElm);
+                 index ++;
+-                pathwayElm.addContent(lineElms);
++                pathwayElm.addContent(lineElm);
+             }
+         }
+         
+@@ -456,7 +454,7 @@
+             Point anchor = backbone.get(backbone.size() - 1);
+             int index = 0;
+             for (List<Point> points : outputBranches) {
+-                List<Element> lineElms = createLineElmForBranch(points,
++                Element lineElm = createLineElmForBranch(points,
+                                                                 anchor,
+                                                                 anchorId,
+                                                                 true, 
+@@ -464,7 +462,7 @@
+                                                                 color,
+                                                                 pointToElm);
+                 index ++;
+-                pathwayElm.addContent(lineElms);
++                pathwayElm.addContent(lineElm);
+             }
+         }
+         List<Node> outputs = edge.getOutputNodes();
+@@ -518,28 +516,34 @@
+         return rtn;
+     }
+                    
+-    private List<Element> createLineElmForBackbone(HyperEdge edge,
++    private Element createLineElmForBackbone(HyperEdge edge,
+                                                    Color color,
+                                                    Map<Point, Element> pointToElm) {
+-        List<Element> lineElms = new ArrayList<Element>();
+         String graphId = "e_" + edge.getID();
+-        createLineElements(graphId, 
++        Element lineElm = createLineElement(graphId, 
+                           color,
+-                          lineElms, 
+                           edge.getBackbonePoints(),
+                           false,
+                           pointToElm);
+         // anchor for input
+         if (edge.getInputPoints() != null) {
+-            // Get the first line
+-            Element lineElm = lineElms.get(0);
+             String id = "e_" + edge.getID() + "_a_i";
+             addAnchorToLineElm(lineElm, 
+                                0.0d, 
+                                id);
+         }
+         // anchor for position
+-        if (lineElms.size() > 1) {
++        if (getGraphicsChild(lineElm).getChildren("Point", GPML_NS).size() > 2) {
++            // Create the anchors
++            List<Point> backbone = edge.getBackbonePoints();
++            AnchorCalculator calculator = new AnchorCalculator(backbone, 0, backbone.size() - 1);
++            List<String> ids = new ArrayList<String>();
++            for (int i = 0; i < backbone.size(); i++) {
++                String id = getAnchorId(edge, backbone.get(i));
++                addAnchorToLineElm(lineElm, calculator.toLineCoordinate(new LinAlg.Point(backbone.get(i).x, backbone.get(i).y)), id);
++                
++            }
++            /*
+             Point pos = edge.getPosition();
+             // Need to find the anchor for the position
+             int index = edge.getBackbonePoints().indexOf(pos);
+@@ -547,33 +551,35 @@
+             // Just another anchor
+             String id = "e_" + edge.getID() + "_a_p";
+             addAnchorToLineElm(lineElm, 1.0d, id);
++            */
+         }
+         // anchor for output
+         if (edge.getOutputPoints() != null) {
+-            // Get the last line
+-            Element lineElm = lineElms.get(lineElms.size() - 1);
+             String id = "e_" + edge.getID() + "_a_o";
+             addAnchorToLineElm(lineElm, 
+                                1.0d, 
+                                id);
+         }
+-        return lineElms;
++        return lineElm;
+     }
+     
+-    private List<Element> createLineElmForBranch(List<Point> points,
++    private String getAnchorId(HyperEdge edge, Point point) {
++        String id = "e_" + edge.getID() + "_a_p_" + point.x + "_" + point.y; // p is for position
++        return id;
++    }
++
++    private Element createLineElmForBranch(List<Point> points,
+                                                  Point anchor,
+                                                  String anchorId,
+                                                  boolean isOutput,
+                                                  String graphId,
+                                                  Color color,
+                                                  Map<Point, Element> pointToElm) {
+-        List<Element> rtn = new ArrayList<Element>();
+         // The lines will be converted by line element one by one 
+         List<Point> pointsCopy = new ArrayList<Point>(points);
+         pointsCopy.add(anchor);
+-        createLineElements(graphId, 
++        Element rtn = createLineElement(graphId, 
+                           color, 
+-                          rtn, 
+                           pointsCopy,
+                           isOutput,
+                           pointToElm);
+@@ -584,12 +590,36 @@
+         return rtn;
+     }
+ 
+-    private void createLineElements(String graphId, 
++    private Element createLineElement(String graphId, 
+                                    Color color,
+-                                   List<Element> rtn, 
+                                    List<Point> points,
+                                    boolean needArrow,
+                                    Map<Point, Element> pointToElm) {
++        // Create a line element between these two points
++        Element lineElm = new Element(GPMLConstants.Line, GPML_NS);
++        lineElm.setAttribute(GPMLConstants.GraphId, 
++                             graphId);
++        Element graphicElm = new Element(GPMLConstants.Graphics, GPML_NS);
++        lineElm.addContent(graphicElm);
++        
++        graphicElm.setAttribute(GPMLConstants.ConnectorType, GPMLConstants.Segmented);
++        graphicElm.setAttribute(GPMLConstants.LineStyle,
++                GPMLConstants.Solid);
++        graphicElm.setAttribute(GPMLConstants.Color, 
++                                GKApplicationUtilities.getHexForColor(color));
++        // Insert the points to the SegmentedConnectorShape
++        for (int i = 0; i < points.size(); i++) {
++            Element ptElm = convertPointToElement(points.get(i),
++                    graphId + "_" + i);
++            graphicElm.addContent(ptElm);
++            pointToElm.put(points.get(i), ptElm);
++            if (needArrow && i == 0) {
++                ptElm.setAttribute(GPMLConstants.ArrowHead, "Arrow");
++            }
++        }
++        return lineElm;
++        
++        /*
+         Element preLineElm = null;
+         for (int i = 0; i < points.size() - 1; i++) {
+             Point first = points.get(i);
+@@ -597,7 +627,9 @@
+             // Create a line element between these two points
+             Element lineElm = new Element(GPMLConstants.Line, GPML_NS);
+             lineElm.setAttribute(GPMLConstants.GraphId, 
+-                                 graphId + "_" + i);  
++                                 graphId + "_" + i);
++            if (needArrow)
++                lineElm.setAttribute(GPMLConstants.ArrowHead, "Arrow");
+             Element graphicElm = new Element(GPMLConstants.Graphics, GPML_NS);
+             lineElm.addContent(graphicElm);
+             graphicElm.setAttribute(GPMLConstants.LineStyle,
+@@ -613,6 +645,7 @@
+             pointToElm.put(first, firstElm);
+             pointToElm.put(second, secondElm);
+             rtn.add(lineElm);
++            
+             // Need to link to previous element
+             if (preLineElm != null) {
+                 // Linked to this element for the firstElm
+@@ -626,6 +659,7 @@
+             if (needArrow && i == 0)
+                 firstElm.setAttribute(GPMLConstants.ArrowHead, "Arrow");
+         }
++        */
+     }
+ 
+     private void addAnchorToLineElm(Element lineElm,
+@@ -656,8 +690,8 @@
+         
+         shape.setAttribute(GPMLConstants.GraphId, 
+                            "comp_" + compartment.getID());
+-        shape.setAttribute(GPMLConstants.GroupRef,
+-                           "group_comp_" + compartment.getID());
++        //shape.setAttribute(GPMLConstants.GroupRef,
++        //                   "group_comp_" + compartment.getID());
+         addGraphicsElm(compartment, shape);
+         Element graphics = getGraphicsChild(shape);
+         graphics.setAttribute(GPMLConstants.ShapeType, 
+@@ -1059,4 +1093,144 @@
+         System.out.println("Total pathways: " + pathways.size());
+     }
+     
++    /*
++     * Copied and adapted from org.pathvisio.model.ConnectorShape.Segment.
++     */
++    private class Segment {
++        private LinAlg.Point start, end;
++
++        protected Segment(LinAlg.Point start, LinAlg.Point end) {
++            this.start = start;
++            this.end = end;
++        }
++
++        public LinAlg.Point getMEnd() {
++            return end;
++        }
++
++        public LinAlg.Point getMStart() {
++            return start;
++        }
++
++        public void setMEnd(LinAlg.Point end) {
++            this.end = end;
++        }
++
++        public void setMStart(LinAlg.Point start) {
++            this.start = start;
++        }
++
++        public double getMLength() {
++            return LinAlg.distance(start, end);
++        }
++    }
++    
++    /*
++     * This class contains the algorithm to translate 2D coordinate (X, Y) to 1D coordinate used
++     * by <Anchor>. Copied and adapted from org.pathvisio.model.SegmentedConnector.
++     */
++    private class AnchorCalculator {
++        private Segment[] segments;
++        
++        /**
++         * @param points
++         * @param start the index of the first point of the segment
++         * @param end the index of the last point of the segment 
++         */
++        public AnchorCalculator(List<Point> points, int start, int end) {
++            Segment[] seg = new Segment[end - start];
++            for (int i = start; i < end; i++) {
++                seg[i] = new Segment(
++                        new LinAlg.Point(points.get(i).x, points.get(i).y),
++                        new LinAlg.Point(points.get(i+1).x, points.get(i+1).y)
++                );
++            }
++            segments = seg;
++        }
++        
++        public Segment[] getSegments() {
++            return segments;
++        }
++        
++        protected double getTotalLength() {
++            double totLength = 0.0;
++            for (Segment seg:getSegments()) {
++                totLength = seg.getMLength() + totLength;
++            }
++            return totLength;
++        }
++        
++        protected Segment findSegment(Segment[] segments, LinAlg.Point v) {
++            Segment foundSeg = null;
++            double closestFit = Double.MAX_VALUE;
++            double currFit;
++            for (Segment seg:segments) {
++                // projection of v on the segment 
++                // TODO: probably could be merged with LinAlg.project.
++                // Couldn't do that right away because I need the intermediate u value.
++                LinAlg.Point base = seg.getMStart();
++                LinAlg.Point direction = seg.getMEnd().subtract(seg.getMStart());
++                LinAlg.Point vrelative = v.subtract(seg.getMStart());
++
++                double u = ((vrelative.x)*(direction.x) + (vrelative.y) * (direction.y)) 
++                / ((direction.x) * (direction.x) + (direction.y) * (direction.y));
++
++                LinAlg.Point projection = new LinAlg.Point(base.x + u * direction.x, base.y + u * (direction.y));
++
++                // special case: if u is smaller than 0 or larger than 1
++                // then closest lies outside the segment.
++                if (u < 0) currFit = LinAlg.distance(v, seg.getMStart());
++                else if (u > 1) currFit = LinAlg.distance(v, seg.getMEnd());
++                else currFit = LinAlg.distance (projection, v);
++
++                if (currFit < closestFit) {
++                    closestFit = currFit;
++                }
++            }
++            return foundSeg;
++        }
++        
++        protected double locateOnSegment(Segment seg, LinAlg.Point v) {
++            return LinAlg.toLineCoordinates(
++                    seg.getMStart(),
++                    seg.getMEnd(),
++                    v);
++        }
++        
++        /* *
++         *   Find how this segment fits in with the whole elbow and return
++         *      the cursor position may not always be exactly on the segment so need to make best guess.
++         */
++        protected double locateOnConnector(Segment segment, LinAlg.Point v) {
++            double segPercentOfTot = 0.0;
++            double currSegPercentOfTot;
++            double totLength = getTotalLength();
++            for (Segment seg:getSegments()) {
++                currSegPercentOfTot = seg.getMLength() / totLength;
++                if (seg.equals(segment)) {
++                    currSegPercentOfTot = currSegPercentOfTot * locateOnSegment(seg, v);
++                    segPercentOfTot = currSegPercentOfTot + segPercentOfTot;
++                    break;
++                }
++                segPercentOfTot = currSegPercentOfTot + segPercentOfTot;
++            }
++            return segPercentOfTot;
++        }
++        
++        public double toLineCoordinate(LinAlg.Point v) {
++            Segment[] segments = getSegments();
++            Segment seg = findSegment(segments, v);
++            if (seg == null) {
++                //there is no segment, which means it is the same as a StraightConnectorShape
++                return LinAlg.toLineCoordinates(
++                        segments[0].getMStart(),
++                        segments[segments.length-1].getMEnd(),
++                        v
++                );
++            }
++            return locateOnConnector(seg, v);
++        }
++        
++    }
++    
+ }
+Index: src/org/pathvisio/view/LinAlg.java
+===================================================================
+RCS file: src/org/pathvisio/view/LinAlg.java
+diff -N src/org/pathvisio/view/LinAlg.java
+--- /dev/null	1 Jan 1970 00:00:00 -0000
++++ src/org/pathvisio/view/LinAlg.java	1 Jan 1970 00:00:00 -0000
+@@ -0,0 +1,176 @@
++// PathVisio,
++// a tool for data visualization and analysis using Biological Pathways
++// Copyright 2006-2009 BiGCaT Bioinformatics
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++//
++package org.pathvisio.view;
++
++import java.awt.geom.Point2D;
++
++/**
++ * Helper class for rotation calculations.
++ *
++ */
++public class LinAlg
++{
++
++    /**
++     * Determines angle between two vectors defined by p1 and p2
++     * Both vectors start at 0.0
++     *
++     * @param p1 start point of vector
++     * @param p2 end point of vector
++     * @return angle in radians
++     */
++    public static double angle(Point p1, Point p2)
++    {
++        //Angle:
++        //                  p1.p2
++        //cos(angle) = --------------
++        //              ||p1||*||p2||
++
++        double cos = dot(p1,p2) / (p1.len() * p2.len());
++        if(cos>1)
++        {
++            cos=1;
++        }
++        return direction(p1,p2) * Math.acos(cos);
++    }
++
++    /**
++     * negative: ccw positive: cw
++     */
++    public static double direction(Point p1, Point p2)
++    {
++
++        return Math.signum(p1.x * p2.y - p1.y * p2.x);
++    }
++
++    private static double dot(Point v1, Point v2)
++    {
++        double[] d1 = v1.asArray();
++        double[] d2 = v2.asArray();
++        double sum = 0;
++        for(int i = 0; i < Math.min(d1.length, d2.length); i++) sum += d1[i]*d2[i];
++        return sum;
++    }
++
++    /**
++       Projection of point q on a line through p with direction vector v
++
++       If p is 0,0, it's the same as the two-argument function with the same name.
++     */
++    public static Point project (Point p, Point q, Point v)
++    {
++        Point q2 = new Point (q.x - p.x, q.y - p.y);
++        double vlen = dot (v, v);
++        if (vlen == 0)
++        {
++            return p;
++        }
++        else
++        {
++            double c = dot (q2, v) / dot (v, v);
++            return new Point (p.x + v.x * c, p.y + v.y * c);
++        }
++    }
++
++    /**
++     * Convert a 2-D point to 1-D line coordinates (relative position on the line, range {0,1})
++     */
++    public static double toLineCoordinates (Point start, Point end, Point p) {
++        //Project v position on line and calculate relative position
++        Point direction = start.subtract(end);
++        Point projection = project(start, p, direction);
++        double lineLength = distance(start, end);
++        double anchorLength = distance(start, projection);
++        double position = anchorLength / lineLength;
++
++        double ldir = direction(start, end);
++        double adir = direction(start, projection);
++        if(adir != ldir) {
++            position = 0;
++        }
++        if(position > 1) position = 1;
++        if(position < 0) position = 0;
++        if(Double.isNaN(position)) position = 0;
++        return position;
++    }
++    /**
++      Projection of p1 on p2:
++
++       p1.p2
++       ----- . p2
++       p2.p2
++    */
++    public static Point project(Point p1, Point p2)
++    {
++        double c = dot(p1, p2) / dot(p2, p2);
++        return new Point(p2.x * c, p2.y * c);
++    }
++
++    public static double distance(Point p1, Point p2)
++    {
++        Point dp = p2.subtract(p1);
++        return dp.len();
++    }
++
++    public static Point rotate(Point p, double angle)
++    {
++        Point pr = new Point(0,0);
++        pr.x = p.x * Math.cos(angle) + p.y * Math.sin(angle);
++        pr.y = -p.x * Math.sin(angle) + p.y * Math.cos(angle);
++        return pr;
++    }
++
++    /**
++     * Point, pair of doubles. Supports adding, substracting,
++     * calculating the length of the vector, etc.
++     */
++    public static class Point
++    {
++        public double x, y;
++
++        public Point(double x, double y) { this.x = x; this.y = y;  }
++
++        public Point(Point2D p2d) {
++            this(p2d.getX(), p2d.getY());
++        }
++
++        public Point2D toPoint2D() {
++            return new Point2D.Double(x, y);
++        }
++
++        public int[] asIntArray() { return new int[] { (int)x, (int)y }; }
++
++        public double[] asArray() { return new double[] { x, y }; }
++
++        public Point norm()
++        {
++            double l = len();
++            return new Point(x / l, y / l);
++        }
++        public double len()
++        {
++            return Math.sqrt(dot(this, this));
++        }
++
++        public Point add(Point p) { return new Point(x + p.x, y + p.y); }
++        public Point subtract(Point p) { return new Point(x - p.x, y - p.y); }
++        public Point multiply(double d) { return new Point(x *= d, y *= d); }
++
++        public Point clone() { return new Point(x, y); }
++        public String toString() { return "Point: " + x + ", " + y; }
++    }
++}

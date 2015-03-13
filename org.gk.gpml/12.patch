@@ -1,0 +1,65 @@
+---------------------
+PatchSet 12 
+Date: 2010/06/28 21:29:21
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+General clean-up.
+
+Members: 
+	ReactomeToGPMLConverter.java:1.10->1.11 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.10 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.11
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.10	Mon Jun 28 09:21:42 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Mon Jun 28 09:29:21 2010
+@@ -30,7 +30,6 @@
+ import org.gk.render.Node;
+ import org.gk.render.Note;
+ import org.gk.render.DefaultRenderConstants;
+-import org.gk.render.ReactionType;
+ import org.gk.render.Renderable;
+ import org.gk.render.RenderableChemical;
+ import org.gk.render.RenderableCompartment;
+@@ -38,7 +37,6 @@
+ import org.gk.render.RenderablePathway;
+ import org.gk.render.RenderableProtein;
+ import org.gk.render.RenderableRNA;
+-import org.gk.render.RenderableReaction;
+ import org.gk.util.GKApplicationUtilities;
+ import org.jdom.Document;
+ import org.jdom.Element;
+@@ -66,6 +64,7 @@
+     private final Namespace BP_NS = Namespace.getNamespace("bp",
+                                                            GPMLConstants.BIOPAX_NS);
+     private final int COORDINATE_SCALE_TO_GPML = 1; // Very strange. Not sure why!
++    private final Font DEFAULT_FONT = new Font("Dialog", Font.PLAIN, 12);
+     // The root element for pathway
+     private Element pathwayElm;
+     private Element biopaxElm;
+@@ -103,7 +102,7 @@
+         Dimension size = editor.getPreferredSize();
+         BufferedImage image = new BufferedImage(size.width, size.height, BufferedImage.TYPE_3BYTE_BGR);
+         Graphics g = image.createGraphics();
+-        g.setFont(new Font("Dialog", Font.PLAIN, 12));
++        g.setFont(DEFAULT_FONT);
+         // Need to set clip with the whole size so that everything can be drawn
+         Rectangle clip = new Rectangle(size);
+         g.setClip(clip);
+@@ -978,10 +977,14 @@
+         return Integer.toHexString(c.getRGB() & 0x00ffffff);
+     }
+     
++    String wrapLines(String s, int width, Font font, String lineBreak) {
++        return "";
++    }
++    
+     private void addCosmetics(Element dataNode, GKInstance inst) {
+         String type = dataNode.getAttributeValue("Type");
+         Element graphics = getGraphicsChild(dataNode);
+-        System.out.println("::"+type+"::"+dataNode.getAttributeValue("TextLabel"));
++        //System.out.println("::"+type+"::"+dataNode.getAttributeValue("TextLabel"));
+         graphics.setAttribute(GPMLConstants.FillColor, getHexString(DefaultRenderConstants.DEFAULT_BACKGROUND));
+         if (type.equals("Complex")) {
+             graphics.setAttribute(GPMLConstants.ShapeType, GPMLConstants.RoundedRectangle);

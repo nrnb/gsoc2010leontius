@@ -1,0 +1,37 @@
+---------------------
+PatchSet 9 
+Date: 2010/06/07 23:17:35
+Author: leon
+Branch: HEAD
+Tag: (none) 
+Log:
+Index out of bounds also occurs for non- OMITTED_PROCESS ReactionType, so just use a "one-size-fits-all" workaround, which is setting the anchor to an arbitrary position. This will mess up anchors in relevant edges.
+
+Members: 
+	ReactomeToGPMLConverter.java:1.7->1.8 
+
+Index: GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java
+diff -u GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.7 GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.8
+--- GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java:1.7	Mon Jun  7 10:54:39 2010
++++ GKB/java/authorTool/src/org/gk/gpml/ReactomeToGPMLConverter.java	Mon Jun  7 11:17:35 2010
+@@ -524,16 +524,10 @@
+         }
+         // anchor for position
+         if (lineElms.size() > 1) {
+-            int index = 0;
+-            RenderableReaction r = (RenderableReaction) edge;
+-            // An Omitted Process has an anchor at the beginning of the edge declaration, so in that case
+-            // we can just use index == 0
+-            if (r == null || r.getReactionType() == null || r.getReactionType() != ReactionType.OMITTED_PROCESS) {
+-                // Need to find the anchor for the position
+-                Point pos = edge.getPosition();
+-                index = edge.getBackbonePoints().indexOf(pos) - 1;
+-            }
+-            Element lineElm = lineElms.get(index);
++            Point pos = edge.getPosition();
++            // Need to find the anchor for the position
++            int index = edge.getBackbonePoints().indexOf(pos);
++            Element lineElm = lineElms.get(index == 0 ? 0 : index - 1);
+             // Just another anchor
+             String id = "e_" + edge.getID() + "_a_p";
+             addAnchorToLineElm(lineElm, 1.0d, id);
